@@ -1,0 +1,324 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// NextAuth.js Models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// OTP Model for email-based authentication
+model Otp {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expires   DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+// User Model (from CLAUDE.md spec)
+model User {
+  id            String    @id @default(cuid())
+  privyId       String?   @unique // Privy user ID for authentication
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  bio           String?
+  profileImage  String?
+
+  // Location (latitude/longitude stored for GPS verification but only city shown publicly)
+  country   String?
+  state     String?
+  city      String?
+  latitude  Float? // Private: for GPS verification only
+  longitude Float? // Private: for GPS verification only
+
+  // Socials
+  xHandle  String?
+  linkedIn String?
+
+  // Private fields (admin-only)
+  phone         String?
+  walletAddress String?
+  notes         String? // Admin notes
+
+  // Role
+  role Role @default(USER)
+
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastActiveAt DateTime @default(now())
+
+  // NextAuth Relations
+  accounts Account[]
+  sessions Session[]
+
+  // Event Relations
+  eventsCreated      Event[]              @relation("EventCreator")
+  eventRsvps         EventRsvp[]
+  eventAttendance    EventAttendance[]
+  eventInvites       EventInvite[]
+  eventJoinRequests  EventJoinRequest[]
+
+  // Meetup Relations
+  meetupsInitiated Meetup[] @relation("InitiatedBy")
+  meetupsReceived  Meetup[] @relation("ReceivedBy")
+
+  // Badge & Report Relations
+  badges  Badge[]
+  reports Report[]
+}
+
+enum Role {
+  ADMIN
+  CONTRIBUTOR
+  USER
+}
+
+// Event Model
+model Event {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+
+  // Privacy & Access
+  isPublic     Boolean @default(true) // true = public, false = private
+  maxAttendees Int? // Optional capacity limit
+
+  // Approval Status (admins approve user-created events)
+  approvalStatus EventStatus @default(PENDING)
+
+  // Location
+  location  String // City/place name
+  latitude  Float // For GPS verification
+  longitude Float // For GPS verification
+  radius    Int    @default(100) // meters for check-in validation
+
+  // Timing
+  startTime DateTime
+  endTime   DateTime
+
+  // QR Code for check-in verification
+  qrSecret String @unique
+
+  // Creator
+  createdById String
+  creator     User   @relation("EventCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Relations
+  rsvps        EventRsvp[]
+  attendances  EventAttendance[]
+  invites      EventInvite[] // For private events
+  joinRequests EventJoinRequest[] // For public events
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum EventStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Event RSVP Model
+model EventRsvp {
+  id      String     @id @default(cuid())
+  eventId String
+  userId  String
+  status  RsvpStatus @default(GOING)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+}
+
+enum RsvpStatus {
+  GOING
+  NOT_GOING
+}
+
+// Event Attendance Model
+model EventAttendance {
+  id       String @id @default(cuid())
+  eventId  String
+  userId   String
+
+  // Verification data
+  latitude  Float
+  longitude Float
+  distance  Float // distance from event in meters
+  checkedInAt DateTime @default(now())
+
+  // NFT
+  nftMinted Boolean @default(false)
+  txHash    String?
+  tokenId   String?
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+}
+
+// Event Invite Model (for private events)
+model EventInvite {
+  id      String       @id @default(cuid())
+  eventId String
+  userId  String
+  status  InviteStatus @default(PENDING)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  @@unique([eventId, userId])
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// Event Join Request Model (for public events)
+model EventJoinRequest {
+  id      String            @id @default(cuid())
+  eventId String
+  userId  String
+  status  JoinRequestStatus @default(PENDING)
+  message String? // Optional message from user
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  @@unique([eventId, userId])
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Meetup Model
+model Meetup {
+  id String @id @default(cuid())
+
+  initiatedById String
+  receivedById  String
+
+  // Location data
+  initiatorLat Float
+  initiatorLon Float
+  receiverLat  Float?
+  receiverLon  Float?
+
+  location String // City/place name
+  photo    String? // Optional photo
+
+  // Confirmation
+  confirmed   Boolean   @default(false)
+  confirmedAt DateTime?
+
+  initiatedBy User @relation("InitiatedBy", fields: [initiatedById], references: [id], onDelete: Cascade)
+  receivedBy  User @relation("ReceivedBy", fields: [receivedById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// Badge Model
+model Badge {
+  id     String    @id @default(cuid())
+  userId String
+  type   BadgeType
+
+  // NFT data
+  nftMinted Boolean @default(false)
+  txHash    String?
+  tokenId   String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  awardedAt DateTime @default(now())
+}
+
+enum BadgeType {
+  STARTER
+  ACTIVE
+  VETERAN
+  ELITE
+  EVENT_ATTENDANCE
+  MEETUP
+}
+
+// Report Model
+model Report {
+  id         String       @id @default(cuid())
+  userId     String
+  type       String
+  message    String
+  screenshot String?
+  status     ReportStatus @default(PENDING)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+}

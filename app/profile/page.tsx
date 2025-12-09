@@ -144,7 +144,7 @@ export default function ProfilePage() {
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 30000, // 30 seconds for better reliability on production
         maximumAge: 0,
       }
     )

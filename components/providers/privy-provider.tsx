@@ -10,14 +10,17 @@ export function PrivyProvider({ children }: { children: React.ReactNode }) {
     <Privy
       appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!}
       config={{
-        loginMethods: ['email'], // Email only, no wallets
+        loginMethods: ['email', 'google'],
         appearance: {
           theme: 'dark',
           accentColor: '#6366f1',
+          logo: undefined,
         },
         embeddedWallets: {
-          createOnLogin: 'off', // Disable wallet creation
+          createOnLogin: 'off',
         },
+        // Explicitly disable wallet login methods
+        supportedChains: [],
       }}
       onSuccess={() => {
         router.push('/dashboard')

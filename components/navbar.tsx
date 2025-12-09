@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+ 
 "use client"
 
 import Link from 'next/link'
@@ -78,7 +80,6 @@ export default function Navbar() {
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/dashboard', label: 'Dashboard' },
-    { href: '/events', label: 'Events' },
     { href: '/map', label: 'Map' },
     { href: '/directory', label: 'Directory' },
     { href: '/profile', label: 'Profile' },

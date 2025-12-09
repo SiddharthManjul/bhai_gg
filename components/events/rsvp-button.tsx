@@ -87,7 +87,7 @@ export default function RSVPButton({ eventId, currentRsvp, onRsvpChange }: RSVPB
       <div className="flex gap-2">
         <Button className="flex-1 bg-green-600 hover:bg-green-700" disabled>
           <Check className="h-4 w-4 mr-2" />
-          You're Going
+          You&apos;re Going
         </Button>
         <Button
           variant="outline"
@@ -127,7 +127,7 @@ export default function RSVPButton({ eventId, currentRsvp, onRsvpChange }: RSVPB
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
           <>
             <Check className="h-4 w-4 mr-2" />
-            I'm Going
+            I&apos;m Going
           </>
         )}
       </Button>

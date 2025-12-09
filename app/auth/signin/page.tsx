@@ -50,7 +50,7 @@ export default function SignInPage() {
           </Button>
           <div className="text-center text-sm text-muted-foreground">
             <p>
-              We'll send you a verification code to sign in
+              We&apos;ll send you a verification code to sign in
             </p>
           </div>
         </CardContent>

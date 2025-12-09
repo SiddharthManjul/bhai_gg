@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client"
 
 import { useState, useMemo, useCallback } from 'react'
@@ -49,7 +50,7 @@ export default function WorldMap({ pins }: WorldMapProps) {
                   />
                 </div>
               ) : (
-                <div className="w-14 h-14 rounded-full border-4 border-indigo-600 bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg flex items-center justify-center text-white text-xl font-bold">
+                <div className="w-14 h-14 rounded-full border-4 border-indigo-600 bg-linear-to-br from-purple-500 to-indigo-600 shadow-lg flex items-center justify-center text-white text-xl font-bold">
                   {pin.users[0].name.charAt(0).toUpperCase()}
                 </div>
               )
@@ -67,7 +68,7 @@ export default function WorldMap({ pins }: WorldMapProps) {
                 </div>
               </div>
             ) : (
-              <div className="w-14 h-14 rounded-full border-4 border-indigo-600 bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg flex items-center justify-center text-white text-lg font-bold">
+              <div className="w-14 h-14 rounded-full border-4 border-indigo-600 bg-linear-to-br from-indigo-500 to-purple-600 shadow-lg flex items-center justify-center text-white text-lg font-bold">
                 {pin.userCount}
               </div>
             )}
@@ -126,10 +127,10 @@ export default function WorldMap({ pins }: WorldMapProps) {
                     <img
                       src={user.profileImage}
                       alt={user.name}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-indigo-600 flex-shrink-0"
+                      className="w-12 h-12 rounded-full object-cover border-2 border-indigo-600 shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-lg font-bold flex-shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-linear-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-lg font-bold shrink-0">
                       {user.name.charAt(0).toUpperCase()}
                     </div>
                   )}

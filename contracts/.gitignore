@@ -1,0 +1,17 @@
+# Environment variables
+.env
+
+# Build artifacts
+out/
+cache/
+broadcast/
+
+# Dependencies
+lib/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

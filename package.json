@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "extract-abi": "./scripts/extract-abi.sh",
+    "contract:build": "forge build",
+    "contract:test": "forge test",
+    "contract:deploy": "forge script contracts/script/Deploy.s.sol:DeployBhaiBadge --rpc-url monad_testnet --broadcast"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

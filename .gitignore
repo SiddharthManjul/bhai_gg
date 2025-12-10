@@ -43,3 +43,7 @@ next-env.d.ts
 bun.lock
 package-lock.json
 /generated/prisma
+DEPLOYMENT.md
+broadcast
+cache
+foundry.lock

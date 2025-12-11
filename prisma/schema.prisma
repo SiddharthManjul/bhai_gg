@@ -144,6 +144,9 @@ model Event {
   // QR Code for check-in verification
   qrSecret String @unique
 
+  // NFT Badge Image (set by event creator for attendees to mint)
+  badgeImage String? @db.Text
+
   // Creator
   createdById String
   creator     User   @relation("EventCreator", fields: [createdById], references: [id], onDelete: Cascade)
@@ -154,6 +157,7 @@ model Event {
   invites      EventInvite[] // For private events
   joinRequests EventJoinRequest[] // For public events
   guests       EventGuest[] // CSV imported guest list
+  badges       Badge[] // Badges minted for this event
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -281,18 +285,23 @@ model Meetup {
 
 // Badge Model
 model Badge {
-  id     String    @id @default(cuid())
-  userId String
-  type   BadgeType
+  id      String    @id @default(cuid())
+  userId  String
+  eventId String?   // Track which event this badge is for
+  type    BadgeType
 
   // NFT data
   nftMinted Boolean @default(false)
   txHash    String?
   tokenId   String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   awardedAt DateTime @default(now())
+
+  // Prevent duplicate badges for same user+event
+  @@unique([userId, eventId])
 }
 
 enum BadgeType {

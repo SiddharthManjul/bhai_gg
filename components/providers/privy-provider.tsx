@@ -23,7 +23,7 @@ export function PrivyProvider({ children }: { children: React.ReactNode }) {
         supportedChains: [],
       }}
       onSuccess={() => {
-        router.push('/dashboard')
+        router.push('/profile')
       }}
     >
       {children}

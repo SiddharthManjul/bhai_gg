@@ -54,11 +54,13 @@ export async function GET(request: NextRequest) {
     })
     const claimedEventIds = new Set(claimedBadges.map((b) => b.eventId))
 
-    // Build claimable events list (only events user has checked in to)
+    // Build claimable events list (only events user has checked in to AND approved for minting)
     const claimableEvents = userAttendances
       .filter((attendance) => {
-        // Only show events where the creator has set up a badge image
-        return !!attendance.event.badgeImage
+        // Only show events where:
+        // 1. Creator has set up a badge image
+        // 2. User is approved for minting by event host/admin
+        return !!attendance.event.badgeImage && attendance.approvedForMinting
       })
       .map((attendance) => {
         const alreadyClaimed = claimedEventIds.has(attendance.eventId) || attendance.nftMinted
@@ -70,6 +72,7 @@ export async function GET(request: NextRequest) {
           hasCheckedIn: true,
           alreadyClaimed,
           hasBadgeImage: true,
+          approvedForMinting: attendance.approvedForMinting,
         }
       })
 

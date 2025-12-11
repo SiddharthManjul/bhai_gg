@@ -82,6 +82,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if approved for minting by event host/admin
+    if (!event.attendances[0].approvedForMinting) {
+      return NextResponse.json(
+        { error: 'The event host has not yet approved you for NFT minting. Please wait for approval.' },
+        { status: 403 }
+      )
+    }
+
     // Check if already claimed via attendance record
     if (event.attendances[0].nftMinted) {
       return NextResponse.json(

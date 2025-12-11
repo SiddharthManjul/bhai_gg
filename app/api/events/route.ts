@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { getPrivyUserId } from '@/lib/auth'
 import { EventStatus } from '@/generated/prisma/client'
 import { randomBytes } from 'crypto'
+import { generateEventBadgeImage } from '@/lib/generate-nft-image'
 
 // POST /api/events - Create a new event
 export async function POST(request: NextRequest) {
@@ -27,21 +28,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       name,
-      description,
-      isPublic,
-      maxAttendees,
-      location,
-      latitude,
-      longitude,
-      radius,
+      hostName,
       startTime,
       endTime,
     } = body
 
     // Validate required fields
-    if (!name || !location || !latitude || !longitude || !startTime || !endTime) {
+    if (!name || !startTime || !endTime) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: name, startTime, and endTime are required' },
         { status: 400 }
       )
     }
@@ -70,20 +65,31 @@ export async function POST(request: NextRequest) {
     // Auto-approve events created by admins
     const approvalStatus = user.role === 'ADMIN' ? EventStatus.APPROVED : EventStatus.PENDING
 
+    // Generate NFT badge image with event name
+    let badgeImage: string | null = null
+    try {
+      badgeImage = await generateEventBadgeImage(name)
+    } catch (error) {
+      console.error('Error generating badge image:', error)
+      // Continue with event creation even if badge image generation fails
+    }
+
     // Create event
     const event = await db.event.create({
       data: {
         name,
-        description,
-        isPublic: isPublic ?? true,
-        maxAttendees: maxAttendees || null,
-        location,
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
-        radius: radius || 100,
+        hostName: hostName || null,
+        description: null,
+        isPublic: true,
+        maxAttendees: null,
+        location: null,
+        latitude: null,
+        longitude: null,
+        radius: null,
         startTime: start,
         endTime: end,
         qrSecret,
+        badgeImage,
         approvalStatus,
         createdById: user.id,
       },

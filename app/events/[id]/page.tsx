@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
  
 "use client"
@@ -390,12 +391,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  {/* <div className="flex items-center gap-3">
                     <MapPin className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <p className="font-medium">{event.location}</p>
                     </div>
-                  </div>
+                  </div> */}
 
                   <div className="flex items-center gap-3">
                     <Users className="h-5 w-5 text-muted-foreground" />

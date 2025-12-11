@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
 import Link from 'next/link'
@@ -130,10 +131,10 @@ export default function EventCard({ event, showActions = true }: EventCardProps)
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-muted-foreground">
+          {/* <div className="flex items-center gap-2 text-muted-foreground">
             <MapPin className="h-4 w-4 shrink-0" />
             <span>{event.location}</span>
-          </div>
+          </div> */}
 
           <div className="flex items-center gap-2 text-muted-foreground">
             <Users className="h-4 w-4 shrink-0" />

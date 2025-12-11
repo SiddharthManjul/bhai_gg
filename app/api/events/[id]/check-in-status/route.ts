@@ -55,6 +55,14 @@ export async function GET(
         attendances: {
           where: { userId: user.id },
         },
+        guests: {
+          where: {
+            OR: [
+              { userId: user.id },
+              { email: user.email },
+            ],
+          },
+        },
       },
     })
 
@@ -84,9 +92,12 @@ export async function GET(
       withinRadius = distance <= event.radius
     }
 
-    // Check authorization: User must have RSVP'd
-    const isAuthorized =
-      event.rsvps.length > 0 && event.rsvps[0].status === 'GOING'
+    // Check authorization: User must have RSVP'd OR be approved guest
+    const hasRsvp = event.rsvps.length > 0 && event.rsvps[0].status === 'GOING'
+    const isApprovedGuest = event.guests.length > 0 &&
+                            event.guests[0].approvalStatus === 'APPROVED' &&
+                            event.guests[0].registrationStatus === 'REGISTERED'
+    const isAuthorized = hasRsvp || isApprovedGuest
 
     // Determine if can check in
     const canCheckIn =
@@ -108,7 +119,7 @@ export async function GET(
     } else if (!withinRadius && latitude && longitude) {
       reason = `You need to be within ${event.radius}m of the venue (currently ${Math.round(distance)}m away)`
     } else if (!isAuthorized) {
-      reason = 'You need to RSVP as "Going" first'
+      reason = 'You need to RSVP as "Going" or be an approved guest'
     } else if (!latitude || !longitude) {
       reason = 'Location permission required'
     }

@@ -138,6 +138,7 @@ export async function GET(request: NextRequest) {
     const isPublic = searchParams.get('isPublic')
     const upcoming = searchParams.get('upcoming')
     const myEvents = searchParams.get('myEvents')
+    const includeAttendances = searchParams.get('includeAttendances')
 
     // Build where clause
     const where: any = {}
@@ -168,34 +169,69 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Build include clause
+    const includeClause: any = {
+      creator: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          profileImage: true,
+        },
+      },
+      invites: {
+        where: { userId: user.id },
+      },
+      joinRequests: {
+        where: { userId: user.id },
+      },
+      _count: {
+        select: {
+          rsvps: true,
+          attendances: true,
+        },
+      },
+    }
+
+    // Include full RSVPs with user data for badge minting (admins or event creators)
+    if (includeAttendances === 'true' && (user.role === 'ADMIN' || myEvents === 'true')) {
+      includeClause.rsvps = {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              walletAddress: true,
+              profileImage: true,
+            },
+          },
+        },
+      }
+      includeClause.attendances = {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              walletAddress: true,
+              profileImage: true,
+            },
+          },
+        },
+      }
+    } else {
+      // For regular event listing, only include current user's RSVP
+      includeClause.rsvps = {
+        where: { userId: user.id },
+      }
+    }
+
     // Fetch events
     const events = await db.event.findMany({
       where,
-      include: {
-        creator: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            profileImage: true,
-          },
-        },
-        rsvps: {
-          where: { userId: user.id },
-        },
-        invites: {
-          where: { userId: user.id },
-        },
-        joinRequests: {
-          where: { userId: user.id },
-        },
-        _count: {
-          select: {
-            rsvps: true,
-            attendances: true,
-          },
-        },
-      },
+      include: includeClause,
       orderBy: {
         startTime: 'asc',
       },
@@ -205,7 +241,7 @@ export async function GET(request: NextRequest) {
     let filteredEvents = events
 
     if (user.role !== 'ADMIN' && myEvents !== 'true') {
-      filteredEvents = events.filter((event) => {
+      filteredEvents = events.filter((event: any) => {
         // All APPROVED public events are visible to everyone
         if (event.isPublic && event.approvalStatus === 'APPROVED') {
           return true
@@ -217,8 +253,8 @@ export async function GET(request: NextRequest) {
             return true
           }
 
-          const hasAcceptedInvite = event.invites.some(
-            (inv) => inv.status === 'ACCEPTED'
+          const hasAcceptedInvite = event.invites?.some(
+            (inv: any) => inv.status === 'ACCEPTED'
           )
           return hasAcceptedInvite
         }
@@ -228,15 +264,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Remove sensitive data (QR secret)
-    const sanitizedEvents = filteredEvents.map((event) => {
+    const sanitizedEvents = filteredEvents.map((event: any) => {
       const { qrSecret, ...rest } = event
       return {
         ...rest,
-        userRsvp: event.rsvps[0] || null,
-        userInvite: event.invites[0] || null,
-        userJoinRequest: event.joinRequests[0] || null,
-        rsvpCount: event._count.rsvps,
-        attendanceCount: event._count.attendances,
+        userRsvp: event.rsvps?.[0] || null,
+        userInvite: event.invites?.[0] || null,
+        userJoinRequest: event.joinRequests?.[0] || null,
+        rsvpCount: event._count?.rsvps || 0,
+        attendanceCount: event._count?.attendances || 0,
       }
     })
 

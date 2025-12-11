@@ -101,6 +101,7 @@ model User {
   eventAttendance    EventAttendance[]
   eventInvites       EventInvite[]
   eventJoinRequests  EventJoinRequest[]
+  eventGuests        EventGuest[]         // Guest list entries
 
   // Meetup Relations
   meetupsInitiated Meetup[] @relation("InitiatedBy")
@@ -152,6 +153,7 @@ model Event {
   attendances  EventAttendance[]
   invites      EventInvite[] // For private events
   joinRequests EventJoinRequest[] // For public events
+  guests       EventGuest[] // CSV imported guest list
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -321,4 +323,42 @@ enum ReportStatus {
   PENDING
   REVIEWED
   RESOLVED
+}
+
+// Event Guest Model (for CSV imported guests)
+model EventGuest {
+  id       String @id @default(cuid())
+  eventId  String
+  email    String
+  name     String
+
+  // Status from CSV import
+  approvalStatus     GuestApprovalStatus     @default(APPROVED)
+  registrationStatus GuestRegistrationStatus @default(REGISTERED)
+
+  // Linked user (null if not registered yet)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Event relation
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  importedAt DateTime @default(now())
+
+  @@unique([eventId, email])
+  @@index([email])
+  @@index([eventId])
+}
+
+enum GuestApprovalStatus {
+  APPROVED
+  PENDING
+  DECLINED
+  WAITLIST
+}
+
+enum GuestRegistrationStatus {
+  REGISTERED
+  CANCELLED
 }

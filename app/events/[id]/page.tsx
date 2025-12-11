@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import RSVPButton from '@/components/events/rsvp-button'
 import CheckInButton from '@/components/events/check-in-button'
+import GuestImport from '@/components/events/guest-import'
+import GuestList from '@/components/events/guest-list'
 import { Calendar, MapPin, Users, Clock, ArrowLeft, CheckCircle, XCircle, User } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -24,6 +26,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [showJoinRequests, setShowJoinRequests] = useState(false)
+  const [guestListRefresh, setGuestListRefresh] = useState(0)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     if (!authenticated) {
@@ -31,9 +35,22 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       return
     }
 
+    checkIfAdmin()
     fetchEvent()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authenticated, id, router])
+
+  const checkIfAdmin = async () => {
+    try {
+      const res = await fetch(`/api/profile?email=${user?.email?.address}`)
+      const data = await res.json()
+      if (data.user?.role === 'ADMIN') {
+        setIsAdmin(true)
+      }
+    } catch (error) {
+      console.error('Error checking admin status:', error)
+    }
+  }
 
   const fetchEvent = async () => {
     try {
@@ -171,7 +188,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   const canRSVP = event.userJoinRequest?.status === 'APPROVED' ||
                   event.userInvite?.status === 'ACCEPTED' ||
-                  event.canManage
+                  event.canManage ||
+                  isAdmin
 
   return (
     <div className="min-h-screen bg-background">
@@ -333,11 +351,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                       )}
                     </div>
                   ) : (
-                    <RSVPButton
-                      eventId={event.id}
-                      currentRsvp={event.userRsvp}
-                      onRsvpChange={fetchEvent}
-                    />
+                    <>
+                      {isAdmin && !event.canManage && (
+                        <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-700 dark:text-blue-300">
+                          ℹ️ Admin access: You can RSVP without requesting to join
+                        </div>
+                      )}
+                      <RSVPButton
+                        eventId={event.id}
+                        currentRsvp={event.userRsvp}
+                        onRsvpChange={fetchEvent}
+                      />
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -346,6 +371,23 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             {/* Check-In Section - Only for ongoing/started events */}
             {event.approvalStatus === 'APPROVED' && !isPast && canRSVP && (
               <CheckInButton eventId={event.id} onCheckInSuccess={fetchEvent} />
+            )}
+
+            {/* Guest List Management - Only for event creator/admin */}
+            {(event.canManage || isAdmin) && event.approvalStatus === 'APPROVED' && (
+              <>
+                <GuestImport
+                  eventId={event.id}
+                  onImportSuccess={() => {
+                    setGuestListRefresh(prev => prev + 1)
+                    fetchEvent()
+                  }}
+                />
+                <GuestList
+                  eventId={event.id}
+                  refreshTrigger={guestListRefresh}
+                />
+              </>
             )}
           </div>
 
@@ -390,7 +432,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             )}
 
             {/* Organizer Actions */}
-            {event.canManage && (
+            {(event.canManage || isAdmin) && (
               <Card>
                 <CardHeader>
                   <CardTitle>Manage Event</CardTitle>
@@ -414,7 +456,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             )}
 
             {/* Join Requests List */}
-            {event.canManage && showJoinRequests && (
+            {(event.canManage || isAdmin) && showJoinRequests && (
               <Card>
                 <CardHeader>
                   <CardTitle>Join Requests</CardTitle>

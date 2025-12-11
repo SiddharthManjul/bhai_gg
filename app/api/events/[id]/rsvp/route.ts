@@ -60,8 +60,10 @@ export async function POST(
 
     // Check access permissions
     const isCreator = event.createdById === user.id
+    const isAdmin = user.role === 'ADMIN'
 
-    if (!isCreator) {
+    // Admins and creators can always RSVP
+    if (!isCreator && !isAdmin) {
       if (event.isPublic) {
         // For public events, must have approved join request
         const hasApprovedRequest = event.joinRequests.some(

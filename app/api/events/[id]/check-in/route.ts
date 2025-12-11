@@ -10,7 +10,7 @@ import { calculateDistance } from '@/lib/gps'
  * Requirements:
  * 1. Event has started (current time >= event start time)
  * 2. User is within event radius (default 100m)
- * 3. User has RSVP'd as GOING
+ * 3. User has RSVP'd as GOING OR is approved guest in imported list
  */
 export async function POST(
   request: NextRequest,
@@ -52,6 +52,14 @@ export async function POST(
         },
         attendances: {
           where: { userId: user.id },
+        },
+        guests: {
+          where: {
+            OR: [
+              { userId: user.id },
+              { email: user.email },
+            ],
+          },
         },
       },
     })
@@ -124,12 +132,42 @@ export async function POST(
       )
     }
 
-    // Check 3: User must have RSVP'd as GOING
-    if (event.rsvps.length === 0 || event.rsvps[0].status !== 'GOING') {
+    // Check 3: User must have RSVP'd as GOING OR be approved guest OR be admin/creator
+    const hasRsvp = event.rsvps.length > 0 && event.rsvps[0].status === 'GOING'
+    const isApprovedGuest = event.guests.length > 0 &&
+                            event.guests[0].approvalStatus === 'APPROVED' &&
+                            event.guests[0].registrationStatus === 'REGISTERED'
+    const isCreator = event.createdById === user.id
+    const isAdmin = user.role === 'ADMIN'
+
+    if (!hasRsvp && !isApprovedGuest && !isCreator && !isAdmin) {
       return NextResponse.json(
-        { error: 'You must RSVP as "Going" before checking in' },
+        {
+          error: 'You must RSVP as "Going" or be an approved guest to check in',
+          hasRsvp,
+          isApprovedGuest,
+        },
         { status: 403 }
       )
+    }
+
+    // Auto-link guest record if found but not linked
+    if (isApprovedGuest && !event.guests[0].userId) {
+      await db.eventGuest.update({
+        where: { id: event.guests[0].id },
+        data: { userId: user.id },
+      })
+    }
+
+    // Auto-create RSVP if no RSVP exists (for approved guests, admins, or creators)
+    if (!hasRsvp && (isApprovedGuest || isCreator || isAdmin)) {
+      await db.eventRsvp.create({
+        data: {
+          eventId: event.id,
+          userId: user.id,
+          status: 'GOING',
+        },
+      })
     }
 
     // Create attendance record

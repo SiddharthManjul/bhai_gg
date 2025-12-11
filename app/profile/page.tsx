@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable react-hooks/exhaustive-deps */
  
@@ -11,8 +12,13 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { useEffect, useState } from 'react'
-import { Pencil, X } from 'lucide-react'
+import { Pencil, X, Check, ChevronsUpDown } from 'lucide-react'
+import { Country, State, City, ICountry, IState, ICity } from 'country-state-city'
+import { cn } from "@/lib/utils"
+import { useNotification } from '@/components/notification-provider'
 
 // Country codes with flags
 const countryCodes = [
@@ -68,20 +74,13 @@ const countryCodes = [
   { code: '+51', country: 'PE', flag: '🇵🇪' },
 ]
 
-// Common countries list
-const countries = [
-  'United States', 'Canada', 'United Kingdom', 'India', 'China', 'Japan', 'South Korea',
-  'Germany', 'France', 'Italy', 'Spain', 'Brazil', 'Mexico', 'Australia', 'New Zealand',
-  'Singapore', 'United Arab Emirates', 'Saudi Arabia', 'South Africa', 'Nigeria', 'Kenya',
-  'Indonesia', 'Malaysia', 'Philippines', 'Thailand', 'Vietnam', 'Poland', 'Netherlands',
-  'Sweden', 'Norway', 'Denmark', 'Finland', 'Switzerland', 'Austria', 'Belgium', 'Portugal',
-  'Ireland', 'Russia', 'Ukraine', 'Turkey', 'Israel', 'Egypt', 'Pakistan', 'Bangladesh',
-  'Sri Lanka', 'Nepal', 'Argentina', 'Chile', 'Colombia', 'Peru'
-].sort()
+// Get all countries from the library
+const allCountries = Country.getAllCountries()
 
 export default function ProfilePage() {
-  const { user, logout } = usePrivy()
+  const { user, logout, getAccessToken } = usePrivy()
   const router = useRouter()
+  const { showError, showSuccess } = useNotification()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -91,6 +90,25 @@ export default function ProfilePage() {
   const [phoneNumber, setPhoneNumber] = useState('')
   const [walletError, setWalletError] = useState('')
   const [phoneError, setPhoneError] = useState('')
+
+  // Location dropdowns state
+  const [selectedCountry, setSelectedCountry] = useState<ICountry | null>(null)
+  const [selectedState, setSelectedState] = useState<IState | null>(null)
+  const [selectedCity, setSelectedCity] = useState<ICity | null>(null)
+  const [availableStates, setAvailableStates] = useState<IState[]>([])
+  const [availableCities, setAvailableCities] = useState<ICity[]>([])
+
+  // Popover open states
+  const [countryOpen, setCountryOpen] = useState(false)
+  const [stateOpen, setStateOpen] = useState(false)
+  const [cityOpen, setCityOpen] = useState(false)
+  const [phoneCodeOpen, setPhoneCodeOpen] = useState(false)
+
+  // Search states
+  const [countrySearch, setCountrySearch] = useState('')
+  const [stateSearch, setStateSearch] = useState('')
+  const [citySearch, setCitySearch] = useState('')
+  const [phoneCodeSearch, setPhoneCodeSearch] = useState('')
 
   const [formData, setFormData] = useState({
     name: '',
@@ -106,6 +124,37 @@ export default function ProfilePage() {
   })
   const [imagePreview, setImagePreview] = useState<string>('')
 
+  // Badges state
+  interface UserBadge {
+    id: string
+    type: string
+    nftMinted: boolean
+    txHash: string | null
+    tokenId: string | null
+    awardedAt: string
+  }
+
+  const [badges, setBadges] = useState<UserBadge[]>([])
+  const [badgesLoading, setBadgesLoading] = useState(false)
+
+  // Filtered options based on search
+  const filteredCountries = allCountries.filter(country =>
+    country.name.toLowerCase().includes(countrySearch.toLowerCase())
+  )
+
+  const filteredStates = availableStates.filter(state =>
+    state.name.toLowerCase().includes(stateSearch.toLowerCase())
+  )
+
+  const filteredCities = availableCities.filter(city =>
+    city.name.toLowerCase().includes(citySearch.toLowerCase())
+  )
+
+  const filteredPhoneCodes = countryCodes.filter(cc =>
+    cc.country.toLowerCase().includes(phoneCodeSearch.toLowerCase()) ||
+    cc.code.includes(phoneCodeSearch)
+  )
+
   useEffect(() => {
     if (!user) {
       router.push('/auth/signin')
@@ -114,6 +163,30 @@ export default function ProfilePage() {
 
     fetchProfile()
   }, [user, router])
+
+  const fetchBadges = async () => {
+    try {
+      setBadgesLoading(true)
+      const token = await getAccessToken()
+
+      if (!token) {
+        return
+      }
+
+      const res = await fetch('/api/badges/my-badges', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setBadges(data.badges || [])
+      }
+    } catch (error) {
+      console.error('Error fetching badges:', error)
+    } finally {
+      setBadgesLoading(false)
+    }
+  }
 
   const fetchProfile = async () => {
     try {
@@ -133,6 +206,40 @@ export default function ProfilePage() {
           walletAddress: data.user.walletAddress || '',
           profileImage: data.user.profileImage || '',
         })
+
+        // Set location dropdowns based on saved data
+        if (data.user.country) {
+          const country = allCountries.find(c => c.name === data.user.country)
+          if (country) {
+            setSelectedCountry(country)
+            const states = State.getStatesOfCountry(country.isoCode)
+            setAvailableStates(states)
+
+            if (data.user.state) {
+              const state = states.find(s => s.name === data.user.state)
+              if (state) {
+                setSelectedState(state)
+                const cities = City.getCitiesOfState(country.isoCode, state.isoCode)
+                setAvailableCities(cities)
+
+                if (data.user.city) {
+                  const city = cities.find(c => c.name === data.user.city)
+                  if (city) {
+                    setSelectedCity(city)
+                  }
+                }
+              }
+            } else if (data.user.city) {
+              // If no state but has city, load all cities in country
+              const allCitiesInCountry = City.getCitiesOfCountry(country.isoCode) || []
+              setAvailableCities(allCitiesInCountry)
+              const city = allCitiesInCountry.find(c => c.name === data.user.city)
+              if (city) {
+                setSelectedCity(city)
+              }
+            }
+          }
+        }
 
         // Parse phone number into country code and number
         if (data.user.phone) {
@@ -158,6 +265,8 @@ export default function ProfilePage() {
         if (data.user.name && data.user.city && data.user.profileImage) {
           setIsNewUser(false)
           setIsEditing(false)
+          // Fetch badges for view mode
+          fetchBadges()
         } else {
           // Incomplete profile, show edit mode
           setIsNewUser(true)
@@ -180,12 +289,12 @@ export default function ProfilePage() {
     if (!file) return
 
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
+      showError('Please select an image file')
       return
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image size must be less than 5MB')
+      showError('Image size must be less than 5MB')
       return
     }
 
@@ -226,26 +335,99 @@ export default function ProfilePage() {
     }
   }
 
+  // Handle country change
+  const handleCountryChange = (countryCode: string) => {
+    const country = allCountries.find(c => c.isoCode === countryCode)
+    if (country) {
+      setSelectedCountry(country)
+      setFormData({ ...formData, country: country.name, state: '', city: '' })
+      setCountryOpen(false)
+
+      // Load states for this country
+      const states = State.getStatesOfCountry(countryCode)
+      setAvailableStates(states)
+      setSelectedState(null)
+      setSelectedCity(null)
+
+      // If no states, load all cities directly for the country
+      if (states.length === 0) {
+        const cities = City.getCitiesOfCountry(countryCode) || []
+        setAvailableCities(cities)
+      } else {
+        setAvailableCities([])
+      }
+    }
+  }
+
+  // Handle state change
+  const handleStateChange = (stateCode: string) => {
+    if (!selectedCountry) return
+
+    const state = availableStates.find(s => s.isoCode === stateCode)
+    if (state) {
+      setSelectedState(state)
+      setFormData({ ...formData, state: state.name, city: '' })
+      setStateOpen(false)
+
+      // Load cities for this state
+      const cities = City.getCitiesOfState(selectedCountry.isoCode, stateCode)
+      setAvailableCities(cities)
+      setSelectedCity(null)
+    }
+  }
+
+  // Handle city change
+  const handleCityChange = (cityName: string) => {
+    const city = availableCities.find(c => c.name === cityName)
+    if (city) {
+      setSelectedCity(city)
+      setFormData({ ...formData, city: city.name })
+      setCityOpen(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.city || !formData.country) {
-      alert('Please enter your city and country')
+    // Validate location fields - must select from dropdowns
+    if (!selectedCountry) {
+      showError('Please select a country from the dropdown')
+      return
+    }
+
+    if (!selectedCity || !formData.city) {
+      showError('Please select a city from the dropdown')
+      return
+    }
+
+    // Ensure the values match dropdown selections (prevent gibberish)
+    if (formData.country !== selectedCountry.name) {
+      showError('Invalid country selection. Please select a valid country from the dropdown.')
+      return
+    }
+
+    if (formData.city !== selectedCity.name) {
+      showError('Invalid city selection. Please select a valid city from the dropdown.')
+      return
+    }
+
+    if (selectedState && formData.state !== selectedState.name) {
+      showError('Invalid state selection. Please select a valid state from the dropdown.')
       return
     }
 
     if (isNewUser && !formData.profileImage) {
-      alert('Please upload a profile image')
+      showError('Please upload a profile image')
       return
     }
 
     if (walletError) {
-      alert('Please fix the wallet address error')
+      showError('Please fix the wallet address error')
       return
     }
 
     if (phoneError) {
-      alert('Please fix the phone number error')
+      showError('Please fix the phone number error')
       return
     }
 
@@ -268,15 +450,16 @@ export default function ProfilePage() {
       })
 
       if (res.ok) {
+        showSuccess('Profile saved successfully!', 'Success')
         setIsNewUser(false)
         setIsEditing(false)
         fetchProfile() // Refresh data
       } else {
-        alert('Failed to save profile')
+        showError('Failed to save profile', 'Error')
       }
     } catch (error) {
       console.error('Error saving profile:', error)
-      alert('Failed to save profile')
+      showError('Failed to save profile', 'Error')
     } finally {
       setSaving(false)
     }
@@ -301,6 +484,15 @@ export default function ProfilePage() {
     return phone
   }
 
+  // Badge helper functions
+  const getExplorerUrl = (txHash: string) =>
+    `https://testnet.monadvision.com/tx/${txHash}`
+
+  const getTwitterShareUrl = (badgeType: string, txHash: string) => {
+    const text = `I just collected my "${badgeType.replace('_', ' ')}" badge on @bhai_gg! 🎉\n\nPowered by @monad_xyz\n\n${getExplorerUrl(txHash)}`
+    return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
+  }
+
   if (!user || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -312,8 +504,9 @@ export default function ProfilePage() {
   // View Mode
   if (!isEditing && !isNewUser) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <Card className="w-full max-w-2xl">
+      <div className="min-h-screen p-4 py-8">
+        <div className="container mx-auto max-w-7xl">
+          <Card className="w-full">
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
               {imagePreview && (
@@ -340,9 +533,11 @@ export default function ProfilePage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <CardContent>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left column - Profile Details (2/3 width on large screens) */}
+              <div className="lg:col-span-2 space-y-6">
+                <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <dt className="text-sm font-medium text-muted-foreground">Email</dt>
                   <dd className="mt-1 text-sm">{user?.email?.address || 'N/A'}</dd>
@@ -400,34 +595,106 @@ export default function ProfilePage() {
                   </div>
                 )}
               </dl>
-            </div>
 
-            <div className="flex flex-col gap-3 pt-4 border-t">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Button onClick={() => router.push('/events')} variant="outline" size="sm">
-                  Events
-                </Button>
-                <Button onClick={() => router.push('/map')} variant="outline" size="sm">
-                  Map
-                </Button>
-                <Button onClick={() => router.push('/directory')} variant="outline" size="sm">
-                  Directory
-                </Button>
-                <Button onClick={() => router.push('/badges')} variant="outline" size="sm">
-                  Badges
+              {/* Navigation Buttons */}
+              <div className="flex flex-col gap-3 pt-4 border-t">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <Button onClick={() => router.push('/events')} variant="outline" size="sm">
+                    Events
+                  </Button>
+                  <Button onClick={() => router.push('/map')} variant="outline" size="sm">
+                    Map
+                  </Button>
+                  <Button onClick={() => router.push('/directory')} variant="outline" size="sm">
+                    Directory
+                  </Button>
+                </div>
+                {isAdmin && (
+                  <Button onClick={() => router.push('/admin')} className="w-full" size="sm">
+                    Admin Panel
+                  </Button>
+                )}
+                <Button onClick={handleLogout} variant="outline" size="sm">
+                  Sign Out
                 </Button>
               </div>
-              {isAdmin && (
-                <Button onClick={() => router.push('/admin')} className="w-full" size="sm">
-                  Admin Panel
-                </Button>
+              </div>
+
+              {/* Right column - Badge Collection (1/3 width on large screens) */}
+              <div className="lg:col-span-1">
+                <div className="lg:sticky lg:top-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold">Badges</h3>
+                    {!badgesLoading && badges.length > 0 && (
+                      <span className="text-sm text-muted-foreground">{badges.length}</span>
+                    )}
+                  </div>
+              {badgesLoading ? (
+                <p className="text-sm text-muted-foreground">Loading badges...</p>
+              ) : badges.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground bg-muted/30 rounded-lg">
+                  <p>No badges collected yet.</p>
+                  <p className="text-sm mt-2">
+                    Attend events and claim your NFT badges!
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-4 max-h-[600px] overflow-y-auto pr-2">
+                  {badges.map((badge) => (
+                    <div
+                      key={badge.id}
+                      className="p-3 border rounded-lg bg-linear-to-br from-purple-50 to-indigo-50 dark:from-purple-950 dark:to-indigo-950"
+                    >
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium px-2 py-1 bg-secondary rounded">
+                            {badge.type.replace('_', ' ')}
+                          </span>
+                          {badge.nftMinted && (
+                            <span className="text-xs text-green-600 dark:text-green-400">✓</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(badge.awardedAt).toLocaleDateString()}
+                        </p>
+
+                        {badge.txHash && (
+                          <div className="flex flex-col gap-1.5">
+                            <a
+                              href={getExplorerUrl(badge.txHash)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
+                            >
+                              🔍 View on Explorer
+                            </a>
+                            <a
+                              href={getTwitterShareUrl(badge.type, badge.txHash)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-black hover:bg-gray-800 text-white rounded transition-colors"
+                            >
+                              𝕏 Share on Twitter
+                            </a>
+                          </div>
+                        )}
+
+                        {badge.tokenId && (
+                          <p className="text-xs text-muted-foreground">
+                            Token #{badge.tokenId}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-              <Button onClick={handleLogout} variant="outline" size="sm">
-                Sign Out
-              </Button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     )
   }
@@ -525,48 +792,181 @@ export default function ProfilePage() {
                 />
               </div>
 
-              {/* Location - Manual Entry */}
+              {/* Location - Searchable Dropdown Selection */}
               <div className="space-y-4">
                 <Label>Location *</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="country" className="text-sm text-muted-foreground">Country</Label>
-                    <Select
-                      value={formData.country}
-                      onValueChange={(value) => setFormData({ ...formData, country: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select country" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {countries.map((country) => (
-                          <SelectItem key={country} value={country}>
-                            {country}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="city" className="text-sm text-muted-foreground">City</Label>
-                    <Input
-                      id="city"
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      placeholder="Enter your city"
-                      required
-                    />
-                  </div>
-                </div>
+
+                {/* Country Combobox */}
                 <div className="space-y-2">
-                  <Label htmlFor="state" className="text-sm text-muted-foreground">State/Province (Optional)</Label>
-                  <Input
-                    id="state"
-                    value={formData.state}
-                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                    placeholder="Enter your state or province"
-                  />
+                  <Label htmlFor="country" className="text-sm text-muted-foreground">Country</Label>
+                  <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={countryOpen}
+                        className="w-full justify-between"
+                      >
+                        {selectedCountry ? (
+                          <>
+                            {selectedCountry.flag} {selectedCountry.name}
+                          </>
+                        ) : (
+                          "Select country..."
+                        )}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                      <Command shouldFilter={false}>
+                        <CommandInput
+                          placeholder="Search country..."
+                          value={countrySearch}
+                          onValueChange={setCountrySearch}
+                        />
+                        <CommandList>
+                          <CommandEmpty>No country found.</CommandEmpty>
+                          <CommandGroup>
+                            {filteredCountries.map((country) => (
+                              <CommandItem
+                                key={country.isoCode}
+                                value={country.name}
+                                onSelect={() => {
+                                  handleCountryChange(country.isoCode)
+                                  setCountrySearch('')
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedCountry?.isoCode === country.isoCode ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {country.flag} {country.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
+
+                {/* State/Province Combobox */}
+                {selectedCountry && availableStates.length > 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="state" className="text-sm text-muted-foreground">State/Province</Label>
+                    <Popover open={stateOpen} onOpenChange={setStateOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={stateOpen}
+                          className="w-full justify-between"
+                        >
+                          {selectedState ? selectedState.name : "Select state/province..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Search state/province..."
+                            value={stateSearch}
+                            onValueChange={setStateSearch}
+                          />
+                          <CommandList>
+                            <CommandEmpty>No state/province found.</CommandEmpty>
+                            <CommandGroup>
+                              {filteredStates.map((state) => (
+                                <CommandItem
+                                  key={state.isoCode}
+                                  value={state.name}
+                                  onSelect={() => {
+                                    handleStateChange(state.isoCode)
+                                    setStateSearch('')
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      selectedState?.isoCode === state.isoCode ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {state.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+
+                {/* City Combobox */}
+                {selectedCountry && (
+                  <div className="space-y-2">
+                    <Label htmlFor="city" className="text-sm text-muted-foreground">City *</Label>
+                    <Popover open={cityOpen} onOpenChange={setCityOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={cityOpen}
+                          className="w-full justify-between"
+                          disabled={availableCities.length === 0}
+                        >
+                          {selectedCity ? selectedCity.name : "Select city..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Search city..."
+                            value={citySearch}
+                            onValueChange={setCitySearch}
+                          />
+                          <CommandList>
+                            <CommandEmpty>No city found.</CommandEmpty>
+                            <CommandGroup>
+                              {filteredCities.map((city) => (
+                                <CommandItem
+                                  key={`${city.name}-${city.stateCode || 'none'}`}
+                                  value={city.name}
+                                  onSelect={() => {
+                                    handleCityChange(city.name)
+                                    setCitySearch('')
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      selectedCity?.name === city.name ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {city.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {availableCities.length === 0 && selectedCountry && availableStates.length > 0 && (
+                      <p className="text-xs text-yellow-600">
+                        Please select a state/province first.
+                      </p>
+                    )}
+                    {availableCities.length === 0 && selectedCountry && availableStates.length === 0 && (
+                      <p className="text-xs text-red-600">
+                        No cities found for this country in our database.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground">
                   Your location will be shown on the community map at city level only.
                 </p>
@@ -610,29 +1010,67 @@ export default function ProfilePage() {
                   {/* Phone Number with Country Code */}
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone Number</Label>
-                    <div className="flex">
-                      <Select
-                        value={phoneCountryCode}
-                        onValueChange={setPhoneCountryCode}
-                      >
-                        <SelectTrigger className="w-[100px] rounded-r-none">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {countryCodes.map((cc, index) => (
-                            <SelectItem key={`${cc.country}-${index}`} value={`${cc.code}|${cc.country}`}>
-                              {cc.flag} {cc.code}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="flex gap-2">
+                      <Popover open={phoneCodeOpen} onOpenChange={setPhoneCodeOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={phoneCodeOpen}
+                            className="w-[140px] justify-between"
+                          >
+                            {phoneCountryCode ? (
+                              <>
+                                {countryCodes.find(cc => `${cc.code}|${cc.country}` === phoneCountryCode)?.flag}{' '}
+                                {phoneCountryCode.split('|')[0]}
+                              </>
+                            ) : (
+                              "Code"
+                            )}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[280px] p-0">
+                          <Command shouldFilter={false}>
+                            <CommandInput
+                              placeholder="Search country code..."
+                              value={phoneCodeSearch}
+                              onValueChange={setPhoneCodeSearch}
+                            />
+                            <CommandList>
+                              <CommandEmpty>No country code found.</CommandEmpty>
+                              <CommandGroup>
+                                {filteredPhoneCodes.map((cc, index) => (
+                                  <CommandItem
+                                    key={`${cc.country}-${index}`}
+                                    value={`${cc.country} ${cc.code}`}
+                                    onSelect={() => {
+                                      setPhoneCountryCode(`${cc.code}|${cc.country}`)
+                                      setPhoneCodeOpen(false)
+                                      setPhoneCodeSearch('')
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        phoneCountryCode === `${cc.code}|${cc.country}` ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {cc.flag} {cc.code} ({cc.country})
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <Input
                         id="phone"
                         type="tel"
                         value={phoneNumber}
                         onChange={(e) => handlePhoneChange(e.target.value)}
                         placeholder="1234567890"
-                        className="rounded-l-none flex-1"
+                        className="flex-1"
                       />
                     </div>
                     {phoneError && (

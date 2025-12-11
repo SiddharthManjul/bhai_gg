@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useNotification } from '@/components/notification-provider'
 
 interface Event {
   id: string
@@ -67,6 +68,7 @@ const BADGE_TYPES = [
 export default function AdminBadgesPage() {
   const { user, getAccessToken } = usePrivy()
   const router = useRouter()
+  const { showSuccess, showError } = useNotification()
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [events, setEvents] = useState<Event[]>([])
@@ -184,13 +186,13 @@ export default function AdminBadgesPage() {
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
+      showError('Please select an image file', 'Invalid File Type')
       return
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image size must be less than 5MB')
+      showError('Image size must be less than 5MB', 'File Too Large')
       return
     }
 
@@ -241,7 +243,7 @@ export default function AdminBadgesPage() {
     if (!selectedEvent || selectedAttendees.size === 0) return
 
     if (!badgeImage) {
-      alert('Please upload a badge image first')
+      showError('Please upload a badge image first', 'Badge Image Required')
       return
     }
 
@@ -268,6 +270,7 @@ export default function AdminBadgesPage() {
 
       if (res.ok) {
         setMintResult(data)
+        showSuccess(`Successfully minted ${data.totalSuccess} badge${data.totalSuccess !== 1 ? 's' : ''}!`, 'Badges Minted')
         // Refresh events to update minted status
         await fetchEvents()
         // Update selected event
@@ -275,11 +278,11 @@ export default function AdminBadgesPage() {
         setSelectedEvent(updatedEvent || null)
         setSelectedAttendees(new Set())
       } else {
-        alert(`Error: ${data.error}`)
+        showError(data.error || 'Failed to mint badges', 'Minting Error')
       }
     } catch (error) {
       console.error('Error minting badges:', error)
-      alert('Failed to mint badges')
+      showError('Failed to mint badges. Please try again.', 'Minting Failed')
     } finally {
       setMinting(false)
     }
@@ -558,17 +561,17 @@ export default function AdminBadgesPage() {
                       .filter(a => a.match(/^0x[a-fA-F0-9]{40}$/))
 
                     if (addresses.length === 0) {
-                      alert('No valid addresses found')
+                      showError('No valid addresses found. Please check the format.', 'Invalid Addresses')
                       return
                     }
 
                     if (!selectedEventId) {
-                      alert('Please select an event first')
+                      showError('Please select an event first', 'Event Required')
                       return
                     }
 
                     if (!badgeImage) {
-                      alert('Please upload a badge image first')
+                      showError('Please upload a badge image first', 'Badge Image Required')
                       return
                     }
 
@@ -600,12 +603,13 @@ export default function AdminBadgesPage() {
                       if (res.ok) {
                         setMintResult(data)
                         setManualAddresses('')
+                        showSuccess(`Successfully minted ${data.totalSuccess} badge${data.totalSuccess !== 1 ? 's' : ''}!`, 'Badges Minted')
                       } else {
-                        alert(`Error: ${data.error}`)
+                        showError(data.error || 'Failed to mint badges', 'Minting Error')
                       }
                     } catch (error) {
                       console.error('Error minting badges:', error)
-                      alert('Failed to mint badges')
+                      showError('Failed to mint badges. Please try again.', 'Minting Failed')
                     } finally {
                       setMinting(false)
                     }

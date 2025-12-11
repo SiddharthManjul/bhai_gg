@@ -14,11 +14,13 @@ import CheckInButton from '@/components/events/check-in-button'
 import { Calendar, MapPin, Users, ArrowLeft, QrCode, Copy, Check } from 'lucide-react'
 import { format } from 'date-fns'
 import QRCode from 'qrcode'
+import { useNotification } from '@/components/notification-provider'
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const { authenticated, user, getAccessToken } = usePrivy()
   const router = useRouter()
+  const { showError, showSuccess } = useNotification()
 
   const [event, setEvent] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -28,6 +30,16 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [showQrCode, setShowQrCode] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  // Badge claiming state
+  const [canClaimBadge, setCanClaimBadge] = useState(false)
+  const [badgeAlreadyClaimed, setBadgeAlreadyClaimed] = useState(false)
+  const [claimingBadge, setClaimingBadge] = useState(false)
+  const [badgeMintSuccess, setBadgeMintSuccess] = useState<string | null>(null)
+
+  // Approval state
+  const [selectedAttendees, setSelectedAttendees] = useState<Set<string>>(new Set())
+  const [approvingAttendees, setApprovingAttendees] = useState(false)
 
   useEffect(() => {
     if (!authenticated) {
@@ -71,17 +83,84 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
       if (res.ok) {
         setEvent(data.event)
+        // Check badge claim status after loading event
+        checkBadgeClaimStatus()
       } else {
-        alert(data.error || 'Failed to load event')
+        showError(data.error || 'Failed to load event', 'Error')
         router.push('/events')
       }
     } catch (error) {
       console.error('Error fetching event:', error)
-      alert('Failed to load event')
+      showError('Failed to load event', 'Error')
       router.push('/events')
     } finally {
       setLoading(false)
     }
+  }
+
+  const checkBadgeClaimStatus = async () => {
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/badges/my-badges', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        const claimableEvent = data.claimableEvents?.find((e: any) => e.id === id)
+        const alreadyClaimed = data.badges?.some((b: any) =>
+          b.eventId === id || data.claimableEvents?.find((e: any) => e.id === id)?.alreadyClaimed
+        )
+
+        setCanClaimBadge(claimableEvent && !alreadyClaimed)
+        setBadgeAlreadyClaimed(alreadyClaimed || false)
+      }
+    } catch (error) {
+      console.error('Error checking badge status:', error)
+    }
+  }
+
+  const handleClaimBadge = async () => {
+    setClaimingBadge(true)
+    setBadgeMintSuccess(null)
+
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/badges/claim', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ eventId: id }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        setBadgeMintSuccess(data.txHash)
+        setBadgeAlreadyClaimed(true)
+        setCanClaimBadge(false)
+        showSuccess('NFT Badge claimed successfully!', 'Success')
+        // Refresh event to update attendee list
+        await fetchEvent()
+      } else {
+        showError(data.error || 'Failed to claim badge', 'Error')
+      }
+    } catch (error) {
+      console.error('Error claiming badge:', error)
+      showError('Failed to claim badge', 'Error')
+    } finally {
+      setClaimingBadge(false)
+    }
+  }
+
+  const getExplorerUrl = (txHash: string) =>
+    `https://testnet.monadvision.com/tx/${txHash}`
+
+  const getTwitterShareUrl = (eventName: string, txHash: string) => {
+    const text = `I just claimed my NFT badge for attending "${eventName}" on @bhai_gg! 🎉\n\nPowered by @monad_xyz\n\n${getExplorerUrl(txHash)}`
+    return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
   }
 
   const handleBadgeImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,13 +169,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
+      showError('Please select an image file')
       return
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image size must be less than 5MB')
+      showError('Image size must be less than 5MB')
       return
     }
 
@@ -120,15 +199,15 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         })
 
         if (res.ok) {
-          alert('Badge image saved! Attendees can now claim their NFT badges.')
+          showSuccess('Badge image saved! Attendees can now claim their NFT badges.', 'Success')
           fetchEvent()
         } else {
           const data = await res.json()
-          alert(data.error || 'Failed to save badge image')
+          showError(data.error || 'Failed to save badge image', 'Error')
         }
       } catch (error) {
         console.error('Error uploading badge image:', error)
-        alert('Failed to upload badge image')
+        showError('Failed to upload badge image', 'Error')
       } finally {
         setUploadingBadge(false)
       }
@@ -152,7 +231,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       setShowQrCode(true)
     } catch (error) {
       console.error('Error generating QR code:', error)
-      alert('Failed to generate QR code')
+      showError('Failed to generate QR code', 'Error')
     }
   }
 
@@ -161,6 +240,67 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     await navigator.clipboard.writeText(checkInUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const toggleAttendeeSelection = (userId: string) => {
+    const newSelected = new Set(selectedAttendees)
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId)
+    } else {
+      newSelected.add(userId)
+    }
+    setSelectedAttendees(newSelected)
+  }
+
+  const selectAllAttendees = () => {
+    if (!event.attendances) return
+    const allAttendeeIds = event.attendances.map((a: any) => a.userId)
+    setSelectedAttendees(new Set(allAttendeeIds))
+  }
+
+  const deselectAllAttendees = () => {
+    setSelectedAttendees(new Set())
+  }
+
+  const handleApproveForMinting = async (approved: boolean) => {
+    if (selectedAttendees.size === 0) {
+      showError('Please select at least one attendee', 'No Selection')
+      return
+    }
+
+    setApprovingAttendees(true)
+    try {
+      const token = await getAccessToken()
+      const res = await fetch(`/api/events/${id}/approve-minting`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          attendeeIds: Array.from(selectedAttendees),
+          approved,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        showSuccess(
+          data.message || `${selectedAttendees.size} attendee${selectedAttendees.size !== 1 ? 's' : ''} ${approved ? 'approved' : 'disapproved'}`,
+          'Success'
+        )
+        setSelectedAttendees(new Set())
+        await fetchEvent()
+      } else {
+        showError(data.error || 'Failed to update approval status', 'Error')
+      }
+    } catch (error) {
+      console.error('Error updating approval:', error)
+      showError('Failed to update approval status', 'Error')
+    } finally {
+      setApprovingAttendees(false)
+    }
   }
 
   if (!authenticated || loading) {
@@ -275,31 +415,169 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               <CheckInButton eventId={event.id} onCheckInSuccess={fetchEvent} />
             )}
 
+            {/* Badge Minting Success Alert */}
+            {badgeMintSuccess && (
+              <Card className="border-green-500 bg-green-50 dark:bg-green-950">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🎉</span>
+                      <p className="font-semibold text-green-700 dark:text-green-300">
+                        Badge Minted Successfully!
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <a
+                        href={getExplorerUrl(badgeMintSuccess)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors"
+                      >
+                        🔍 View on Explorer
+                      </a>
+                      <a
+                        href={getTwitterShareUrl(event.name, badgeMintSuccess)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-black hover:bg-gray-800 text-white rounded-md transition-colors"
+                      >
+                        𝕏 Share on Twitter
+                      </a>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Badge Claiming Section - Show if user has checked in */}
+            {event.approvalStatus === 'APPROVED' && event.userAttendance && (
+              <Card className={badgeAlreadyClaimed ? 'border-green-500' : canClaimBadge ? 'border-primary' : 'border-yellow-500'}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    🎁 NFT Badge
+                  </CardTitle>
+                  <CardDescription>
+                    {badgeAlreadyClaimed
+                      ? 'You have claimed your NFT badge for this event!'
+                      : event.userAttendance.approvedForMinting
+                      ? 'Claim your NFT badge for attending this event'
+                      : 'Waiting for event host approval to mint NFT'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {badgeAlreadyClaimed ? (
+                    <div className="flex items-center gap-2 text-green-600">
+                      <Check className="h-5 w-5" />
+                      <span className="font-medium">Badge Claimed</span>
+                    </div>
+                  ) : event.userAttendance.approvedForMinting ? (
+                    <Button
+                      onClick={handleClaimBadge}
+                      disabled={claimingBadge}
+                      size="lg"
+                      className="w-full"
+                    >
+                      {claimingBadge ? 'Minting Badge...' : '🎁 Claim NFT Badge'}
+                    </Button>
+                  ) : (
+                    <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                        ⏳ Your check-in has been recorded. The event host will approve you for NFT minting soon.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Full Attendee List - Only for event creator/admin */}
             {(event.canManage || isAdmin) && event.attendances && event.attendances.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    Checked-In Attendees ({event.attendances.length})
-                  </CardTitle>
-                  <CardDescription>
-                    Complete list of users who checked in to your event
-                  </CardDescription>
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        Checked-In Attendees ({event.attendances.length})
+                      </CardTitle>
+                      <CardDescription>
+                        Select attendees to approve for NFT minting
+                      </CardDescription>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={selectAllAttendees}
+                        disabled={approvingAttendees}
+                      >
+                        Select All
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={deselectAllAttendees}
+                        disabled={approvingAttendees || selectedAttendees.size === 0}
+                      >
+                        Deselect All
+                      </Button>
+                      <div className="flex-1" />
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleApproveForMinting(true)}
+                        disabled={approvingAttendees || selectedAttendees.size === 0}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        ✓ Approve for Minting ({selectedAttendees.size})
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleApproveForMinting(false)}
+                        disabled={approvingAttendees || selectedAttendees.size === 0}
+                      >
+                        ✗ Disapprove ({selectedAttendees.size})
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-muted">
                         <tr>
+                          <th className="w-12 p-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedAttendees.size === event.attendances.length}
+                              onChange={(e) => e.target.checked ? selectAllAttendees() : deselectAllAttendees()}
+                              className="h-4 w-4"
+                            />
+                          </th>
                           <th className="text-left p-3 font-medium">Attendee</th>
                           <th className="text-left p-3 font-medium hidden sm:table-cell">Check-in Time</th>
-                          <th className="text-left p-3 font-medium hidden md:table-cell">NFT Claimed</th>
+                          <th className="text-left p-3 font-medium hidden md:table-cell">Approval Status</th>
+                          <th className="text-left p-3 font-medium hidden lg:table-cell">NFT Claimed</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
                         {event.attendances.map((attendance: any) => (
-                          <tr key={attendance.id} className="hover:bg-muted/50">
+                          <tr
+                            key={attendance.id}
+                            className={`hover:bg-muted/50 cursor-pointer ${selectedAttendees.has(attendance.userId) ? 'bg-primary/5' : ''}`}
+                            onClick={() => toggleAttendeeSelection(attendance.userId)}
+                          >
+                            <td className="p-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedAttendees.has(attendance.userId)}
+                                onChange={() => {}}
+                                className="h-4 w-4"
+                              />
+                            </td>
                             <td className="p-3">
                               <div className="flex items-center gap-3">
                                 {attendance.user.profileImage ? (
@@ -324,10 +602,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                               {format(new Date(attendance.checkedInAt), 'MMM d, h:mm a')}
                             </td>
                             <td className="p-3 hidden md:table-cell">
-                              {attendance.nftMinted ? (
-                                <Badge variant="default" className="bg-green-600">Claimed</Badge>
+                              {attendance.approvedForMinting ? (
+                                <Badge variant="default" className="bg-green-600">Approved</Badge>
                               ) : (
-                                <Badge variant="secondary">Not Claimed</Badge>
+                                <Badge variant="secondary">Not Approved</Badge>
+                              )}
+                            </td>
+                            <td className="p-3 hidden lg:table-cell">
+                              {attendance.nftMinted ? (
+                                <Badge variant="default" className="bg-purple-600">Claimed</Badge>
+                              ) : (
+                                <Badge variant="outline">Not Claimed</Badge>
                               )}
                             </td>
                           </tr>

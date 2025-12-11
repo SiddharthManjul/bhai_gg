@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
 import { useState, useEffect } from 'react'
@@ -8,31 +6,27 @@ import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Switch } from "@/components/ui/switch"
-import { Calendar, MapPin, Users, Clock, ArrowLeft } from 'lucide-react'
+import { CalendarDemo } from "@/components/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ArrowLeft, CalendarIcon } from 'lucide-react'
+import { format } from 'date-fns'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
+import { useNotification } from '@/components/notification-provider'
 
 export default function NewEventPage() {
-  const { authenticated, user, getAccessToken } = usePrivy()
+  const { authenticated, getAccessToken } = usePrivy()
   const router = useRouter()
+  const { showSuccess, showError } = useNotification()
   const [loading, setLoading] = useState(false)
-  const [locationQuery, setLocationQuery] = useState('')
-  const [locationResults, setLocationResults] = useState<any[]>([])
-  const [searchingLocation, setSearchingLocation] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
-    location: '',
-    latitude: 0,
-    longitude: 0,
+    hostName: '',
+    date: undefined as Date | undefined,
     startTime: '',
     endTime: '',
-    isPublic: true,
-    maxAttendees: '',
-    radius: '100',
   })
 
   useEffect(() => {
@@ -41,61 +35,36 @@ export default function NewEventPage() {
     }
   }, [authenticated, router])
 
-  useEffect(() => {
-    if (locationQuery.length > 2) {
-      const timer = setTimeout(() => {
-        searchLocation(locationQuery)
-      }, 500)
-      return () => clearTimeout(timer)
-    } else {
-      setLocationResults([])
-    }
-  }, [locationQuery])
-
-  const searchLocation = async (query: string) => {
-    try {
-      setSearchingLocation(true)
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
-      )
-      const data = await response.json()
-      setLocationResults(data)
-    } catch (error) {
-      console.error('Error searching location:', error)
-    } finally {
-      setSearchingLocation(false)
-    }
-  }
-
-  const selectLocation = (result: any) => {
-    setFormData({
-      ...formData,
-      location: result.display_name,
-      latitude: parseFloat(result.lat),
-      longitude: parseFloat(result.lon),
-    })
-    setLocationQuery(result.display_name)
-    setLocationResults([])
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.location || !formData.latitude || !formData.longitude) {
-      alert('Please select a location from the search results')
+    if (!formData.date) {
+      showError('Please select a date')
       return
     }
 
-    const startTime = new Date(formData.startTime)
-    const endTime = new Date(formData.endTime)
-
-    if (endTime <= startTime) {
-      alert('End time must be after start time')
+    if (!formData.startTime || !formData.endTime) {
+      showError('Please enter start and end times')
       return
     }
 
-    if (startTime < new Date()) {
-      alert('Start time must be in the future')
+    // Combine date and time
+    const [startHour, startMinute] = formData.startTime.split(':')
+    const [endHour, endMinute] = formData.endTime.split(':')
+
+    const startDateTime = new Date(formData.date)
+    startDateTime.setHours(parseInt(startHour), parseInt(startMinute))
+
+    const endDateTime = new Date(formData.date)
+    endDateTime.setHours(parseInt(endHour), parseInt(endMinute))
+
+    if (endDateTime <= startDateTime) {
+      showError('End time must be after start time')
+      return
+    }
+
+    if (startDateTime < new Date()) {
+      showError('Event time must be in the future')
       return
     }
 
@@ -112,29 +81,25 @@ export default function NewEventPage() {
         },
         body: JSON.stringify({
           name: formData.name,
-          description: formData.description || null,
-          location: formData.location,
-          latitude: formData.latitude,
-          longitude: formData.longitude,
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          isPublic: formData.isPublic,
-          maxAttendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : null,
-          radius: parseInt(formData.radius),
+          hostName: formData.hostName,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
         }),
       })
 
       const data = await res.json()
 
       if (res.ok) {
-        alert(data.message || 'Event created successfully!')
-        router.push(`/events/${data.event.id}`)
+        showSuccess(data.message || 'Event created successfully!', 'Success')
+        setTimeout(() => {
+          router.push(`/events/${data.event.id}`)
+        }, 1000)
       } else {
-        alert(data.error || 'Failed to create event')
+        showError(data.error || 'Failed to create event', 'Error')
       }
     } catch (error) {
       console.error('Error creating event:', error)
-      alert('Failed to create event')
+      showError('Failed to create event', 'Error')
     } finally {
       setLoading(false)
     }
@@ -150,7 +115,7 @@ export default function NewEventPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <div className="container mx-auto px-4 py-8 max-w-2xl">
         <div className="mb-6">
           <Button variant="ghost" asChild>
             <Link href="/events">
@@ -182,65 +147,53 @@ export default function NewEventPage() {
                 />
               </div>
 
-              {/* Description */}
+              {/* Host Name */}
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Tell us about your event..."
-                  rows={4}
-                />
-              </div>
-
-              {/* Location Search */}
-              <div className="space-y-2">
-                <Label htmlFor="location">
-                  <MapPin className="inline h-4 w-4 mr-1" />
-                  Location *
-                </Label>
+                <Label htmlFor="hostName">Host Name *</Label>
                 <Input
-                  id="location"
-                  value={locationQuery}
-                  onChange={(e) => setLocationQuery(e.target.value)}
-                  placeholder="Search for a location..."
+                  id="hostName"
+                  value={formData.hostName}
+                  onChange={(e) => setFormData({ ...formData, hostName: e.target.value })}
+                  placeholder="Enter host name"
                   required
                 />
-                {searchingLocation && (
-                  <p className="text-sm text-muted-foreground">Searching...</p>
-                )}
-                {locationResults.length > 0 && (
-                  <div className="border rounded-md max-h-48 overflow-y-auto">
-                    {locationResults.map((result, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => selectLocation(result)}
-                        className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
-                      >
-                        {result.display_name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {formData.location && (
-                  <p className="text-sm text-muted-foreground">
-                    Selected: {formData.location}
-                  </p>
-                )}
               </div>
 
-              {/* Date and Time */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Date Picker */}
+              <div className="space-y-2">
+                <Label>Event Date *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !formData.date && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formData.date ? format(formData.date, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <CalendarDemo
+                      mode="single"
+                      selected={formData.date}
+                      onSelect={(date) => setFormData({ ...formData, date })}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Time Selection */}
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="startTime">
-                    <Calendar className="inline h-4 w-4 mr-1" />
-                    Start Time *
-                  </Label>
+                  <Label htmlFor="startTime">Start Time *</Label>
                   <Input
                     id="startTime"
-                    type="datetime-local"
+                    type="time"
                     value={formData.startTime}
                     onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
                     required
@@ -248,71 +201,15 @@ export default function NewEventPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="endTime">
-                    <Clock className="inline h-4 w-4 mr-1" />
-                    End Time *
-                  </Label>
+                  <Label htmlFor="endTime">End Time *</Label>
                   <Input
                     id="endTime"
-                    type="datetime-local"
+                    type="time"
                     value={formData.endTime}
                     onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
                     required
                   />
                 </div>
-              </div>
-
-              {/* Event Type */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="isPublic">Public Event</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {formData.isPublic
-                        ? 'Anyone can request to join'
-                        : 'Invitation only'}
-                    </p>
-                  </div>
-                  <Switch
-                    id="isPublic"
-                    checked={formData.isPublic}
-                    onCheckedChange={(checked) =>
-                      setFormData({ ...formData, isPublic: checked })
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Max Attendees */}
-              <div className="space-y-2">
-                <Label htmlFor="maxAttendees">
-                  <Users className="inline h-4 w-4 mr-1" />
-                  Max Attendees (Optional)
-                </Label>
-                <Input
-                  id="maxAttendees"
-                  type="number"
-                  value={formData.maxAttendees}
-                  onChange={(e) => setFormData({ ...formData, maxAttendees: e.target.value })}
-                  placeholder="Leave empty for unlimited"
-                  min="1"
-                />
-              </div>
-
-              {/* Check-in Radius */}
-              <div className="space-y-2">
-                <Label htmlFor="radius">Check-in Radius (meters)</Label>
-                <Input
-                  id="radius"
-                  type="number"
-                  value={formData.radius}
-                  onChange={(e) => setFormData({ ...formData, radius: e.target.value })}
-                  min="50"
-                  max="1000"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Attendees must be within this distance to check in (default: 100m)
-                </p>
               </div>
 
               {/* Submit */}

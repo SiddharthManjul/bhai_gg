@@ -27,6 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from 'next/link'
+import { useNotification } from '@/components/notification-provider'
 
 interface User {
   id: string
@@ -72,6 +73,7 @@ interface Event {
 export default function AdminPage() {
   const { user, getAccessToken } = usePrivy()
   const router = useRouter()
+  const { showSuccess, showError } = useNotification()
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<User[]>([])
   const [events, setEvents] = useState<Event[]>([])
@@ -154,14 +156,14 @@ export default function AdminPage() {
         setEvents(events.map(e =>
           e.id === eventId ? { ...e, approvalStatus: status } : e
         ))
-        alert(`Event ${status.toLowerCase()} successfully`)
+        showSuccess(`Event ${status.toLowerCase()} successfully`, 'Success')
       } else {
         const data = await res.json()
-        alert(data.error || 'Failed to update event status')
+        showError(data.error || 'Failed to update event status', 'Error')
       }
     } catch (error) {
       console.error('Error updating event:', error)
-      alert('Failed to update event status')
+      showError('Failed to update event status', 'Error')
     } finally {
       setUpdatingEvent(null)
     }
@@ -185,12 +187,13 @@ export default function AdminPage() {
         setUsers(users.map(u =>
           u.id === userId ? { ...u, role: newRole as any } : u
         ))
+        showSuccess('User role updated successfully', 'Success')
       } else {
-        alert('Failed to update user role')
+        showError('Failed to update user role', 'Error')
       }
     } catch (error) {
       console.error('Error updating role:', error)
-      alert('Failed to update user role')
+      showError('Failed to update user role', 'Error')
     } finally {
       setUpdatingRole(null)
     }

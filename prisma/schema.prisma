@@ -122,6 +122,7 @@ enum Role {
 model Event {
   id          String   @id @default(cuid())
   name        String
+  hostName    String? // Host name for the event
   description String?
 
   // Privacy & Access
@@ -131,11 +132,11 @@ model Event {
   // Approval Status (admins approve user-created events)
   approvalStatus EventStatus @default(PENDING)
 
-  // Location
-  location  String // City/place name
-  latitude  Float // For GPS verification
-  longitude Float // For GPS verification
-  radius    Int    @default(100) // meters for check-in validation
+  // Location (now optional)
+  location  String? // City/place name
+  latitude  Float? // For GPS verification
+  longitude Float? // For GPS verification
+  radius    Int?    @default(100) // meters for check-in validation
 
   // Timing
   startTime DateTime
@@ -200,6 +201,9 @@ model EventAttendance {
   longitude Float
   distance  Float // distance from event in meters
   checkedInAt DateTime @default(now())
+
+  // NFT Minting Approval (admin/host must approve before user can mint)
+  approvedForMinting Boolean @default(false)
 
   // NFT
   nftMinted Boolean @default(false)

@@ -1,0 +1,644 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @next/next/no-img-element */
+"use client"
+
+import { usePrivy } from '@privy-io/react-auth'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+interface Event {
+  id: string
+  name: string
+  location: string
+  startTime: string
+  attendances: Attendance[]
+}
+
+interface Attendance {
+  id: string
+  userId: string
+  nftMinted: boolean
+  txHash: string | null
+  user: {
+    id: string
+    name: string
+    email: string
+    walletAddress: string | null
+    profileImage: string | null
+  }
+}
+
+const BADGE_TYPES = [
+  { value: '0', label: 'Starter' },
+  { value: '1', label: 'Active' },
+  { value: '2', label: 'Veteran' },
+  { value: '3', label: 'Elite' },
+  { value: '4', label: 'Event Attendance' },
+  { value: '5', label: 'Meetup' },
+]
+
+export default function AdminBadgesPage() {
+  const { user, getAccessToken } = usePrivy()
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [events, setEvents] = useState<Event[]>([])
+  const [selectedEventId, setSelectedEventId] = useState<string>('')
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const [selectedAttendees, setSelectedAttendees] = useState<Set<string>>(new Set())
+  const [badgeType, setBadgeType] = useState('4') // Default: EVENT_ATTENDANCE
+  const [minting, setMinting] = useState(false)
+  const [mintResult, setMintResult] = useState<any>(null)
+  const [manualAddresses, setManualAddresses] = useState<string>('')
+  const [activeTab, setActiveTab] = useState<string>('event')
+  const [badgeImage, setBadgeImage] = useState<string>('')
+  const [badgeImagePreview, setBadgeImagePreview] = useState<string>('')
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/auth/signin')
+      return
+    }
+
+    checkAdminAndFetchEvents()
+  }, [user, router])
+
+  const checkAdminAndFetchEvents = async () => {
+    try {
+      // Check user role by fetching profile
+      const res = await fetch(`/api/profile?email=${user?.email?.address}`)
+
+      if (!res.ok) {
+        router.push('/')
+        return
+      }
+
+      const data = await res.json()
+
+      // Admins have full access, event creators can access their own events
+      if (data.user && data.user.role === 'ADMIN') {
+        setIsAdmin(true)
+      }
+      // Note: Non-admins can still access this page to mint badges for their own events
+
+      await fetchEvents()
+    } catch (error) {
+      console.error('Error checking user status:', error)
+      router.push('/')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchEvents = async () => {
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/events?myEvents=true', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        // Only show events that have attendances
+        const eventsWithAttendances = data.events.filter(
+          (e: Event) => e.attendances && e.attendances.length > 0
+        )
+        setEvents(eventsWithAttendances)
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error)
+    }
+  }
+
+  const handleEventSelect = (eventId: string) => {
+    setSelectedEventId(eventId)
+    const event = events.find((e) => e.id === eventId)
+    setSelectedEvent(event || null)
+    setSelectedAttendees(new Set())
+    setMintResult(null)
+    setBadgeImage('')
+    setBadgeImagePreview('')
+  }
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size must be less than 5MB')
+      return
+    }
+
+    // Convert to base64
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const base64String = reader.result as string
+      setBadgeImage(base64String)
+      setBadgeImagePreview(base64String)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const toggleAttendee = (userId: string) => {
+    const newSelected = new Set(selectedAttendees)
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId)
+    } else {
+      newSelected.add(userId)
+    }
+    setSelectedAttendees(newSelected)
+  }
+
+  const selectAll = () => {
+    if (!selectedEvent) return
+
+    const eligibleAttendees = selectedEvent.attendances.filter(
+      (a) => a.user.walletAddress && !a.nftMinted
+    )
+
+    setSelectedAttendees(new Set(eligibleAttendees.map((a) => a.userId)))
+  }
+
+  const autoSelectAllAttendees = () => {
+    if (!selectedEvent) return
+
+    // Auto-select ALL attendees with wallet addresses (including already minted)
+    const allWithWallets = selectedEvent.attendances.filter(
+      (a) => a.user.walletAddress
+    )
+
+    setSelectedAttendees(new Set(allWithWallets.map((a) => a.userId)))
+  }
+
+  const deselectAll = () => {
+    setSelectedAttendees(new Set())
+  }
+
+  const handleMintBadges = async () => {
+    if (!selectedEvent || selectedAttendees.size === 0) return
+
+    if (!badgeImage) {
+      alert('Please upload a badge image first')
+      return
+    }
+
+    setMinting(true)
+    setMintResult(null)
+
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/nft/mint', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          eventId: selectedEvent.id,
+          attendeeIds: Array.from(selectedAttendees),
+          badgeType: parseInt(badgeType),
+          badgeImage,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        setMintResult(data)
+        // Refresh events to update minted status
+        await fetchEvents()
+        // Update selected event
+        const updatedEvent = events.find((e) => e.id === selectedEvent.id)
+        setSelectedEvent(updatedEvent || null)
+        setSelectedAttendees(new Set())
+      } else {
+        alert(`Error: ${data.error}`)
+      }
+    } catch (error) {
+      console.error('Error minting badges:', error)
+      alert('Failed to mint badges')
+    } finally {
+      setMinting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
+
+  const eligibleCount = selectedEvent?.attendances.filter(
+    (a) => a.user.walletAddress && !a.nftMinted
+  ).length || 0
+
+  const alreadyMintedCount = selectedEvent?.attendances.filter(
+    (a) => a.nftMinted
+  ).length || 0
+
+  const noWalletCount = selectedEvent?.attendances.filter(
+    (a) => !a.user.walletAddress
+  ).length || 0
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <main className="flex-1 container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">Mint Event Badges</h1>
+          <p className="text-muted-foreground mt-2">
+            {isAdmin
+              ? 'Select any event and mint NFT badges for attendees'
+              : 'Select your event and mint NFT badges for attendees'}
+          </p>
+          {!isAdmin && (
+            <p className="text-sm text-yellow-600 dark:text-yellow-500 mt-1">
+              You can only mint badges for events you created
+            </p>
+          )}
+        </div>
+
+        {/* Event Selection */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Select Event & Upload Badge Design</CardTitle>
+            <CardDescription>
+              Choose an event and upload the NFT badge design
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 mb-4">
+              <div>
+                <label className="text-sm font-medium">Event</label>
+                <Select value={selectedEventId} onValueChange={handleEventSelect}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Select an event..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {events.map((event) => (
+                      <SelectItem key={event.id} value={event.id}>
+                        {event.name} ({event.attendances.length} attendees)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Badge Type</label>
+                <Select value={badgeType} onValueChange={setBadgeType}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BADGE_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Badge Image Upload */}
+            <div className="border-t pt-4">
+              <label className="text-sm font-medium">Badge Design (Required)</label>
+              <div className="mt-2 grid gap-4 md:grid-cols-2">
+                <div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Upload badge image (PNG, JPG, GIF, WebP - Max 5MB)
+                  </p>
+                </div>
+                {badgeImagePreview && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Preview:</p>
+                    <img
+                      src={badgeImagePreview}
+                      alt="Badge preview"
+                      className="h-32 w-32 object-contain border-2 border-muted rounded-lg"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {selectedEvent && (
+              <div className="mt-4 p-4 bg-muted rounded-lg">
+                <h3 className="font-semibold">{selectedEvent.name}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {selectedEvent.location} • {new Date(selectedEvent.startTime).toLocaleDateString()}
+                </p>
+                <div className="flex gap-4 mt-3 text-sm">
+                  <span>✅ {eligibleCount} eligible</span>
+                  <span>🎫 {alreadyMintedCount} already minted</span>
+                  <span>⚠️ {noWalletCount} no wallet</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Distribution Method */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="event">From Event Attendees</TabsTrigger>
+            <TabsTrigger value="manual">Manual Addresses</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="event" className="mt-4">
+            {/* Attendees List */}
+            {selectedEvent && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Select Attendees</CardTitle>
+                        <CardDescription>
+                          Choose attendees to receive badges ({selectedAttendees.size} selected)
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={autoSelectAllAttendees}
+                        disabled={!selectedEvent}
+                      >
+                        ⚡ Auto-Select All Attendees
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={selectAll}
+                        disabled={eligibleCount === 0}
+                      >
+                        Select Eligible Only
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={deselectAll}
+                        disabled={selectedAttendees.size === 0}
+                      >
+                        Deselect All
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {selectedEvent.attendances.map((attendance) => {
+                  const isEligible = attendance.user.walletAddress && !attendance.nftMinted
+                  const isSelected = selectedAttendees.has(attendance.userId)
+
+                  return (
+                    <div
+                      key={attendance.id}
+                      className={`flex items-center justify-between p-3 border rounded-lg ${
+                        isSelected ? 'border-primary bg-primary/5' : ''
+                      } ${!isEligible ? 'opacity-50' : 'cursor-pointer hover:bg-muted/50'}`}
+                      onClick={() => isEligible && toggleAttendee(attendance.userId)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          disabled={!isEligible}
+                          className="h-4 w-4"
+                        />
+                        {attendance.user.profileImage && (
+                          <img
+                            src={attendance.user.profileImage}
+                            alt={attendance.user.name}
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                        )}
+                        <div>
+                          <p className="font-medium">{attendance.user.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {attendance.user.email}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {attendance.nftMinted && (
+                          <Badge variant="default">Minted ✓</Badge>
+                        )}
+                        {!attendance.user.walletAddress && (
+                          <Badge variant="secondary">No Wallet</Badge>
+                        )}
+                        {attendance.user.walletAddress && !attendance.nftMinted && (
+                          <Badge variant="outline">Eligible</Badge>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="mt-6">
+                <Button
+                  onClick={handleMintBadges}
+                  disabled={selectedAttendees.size === 0 || minting}
+                  className="w-full"
+                  size="lg"
+                >
+                  {minting
+                    ? 'Minting...'
+                    : `🎁 Batch Mint ${selectedAttendees.size} Badge${selectedAttendees.size !== 1 ? 's' : ''}`}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+          </TabsContent>
+
+          <TabsContent value="manual" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Manual Address Distribution</CardTitle>
+                <CardDescription>
+                  Paste wallet addresses (one per line) to batch mint badges
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Wallet Addresses</label>
+                  <Textarea
+                    placeholder="0x123...&#10;0x456...&#10;0x789..."
+                    value={manualAddresses}
+                    onChange={(e) => setManualAddresses(e.target.value)}
+                    rows={10}
+                    className="mt-2 font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Enter one wallet address per line. Invalid addresses will be skipped.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={async () => {
+                    const addresses = manualAddresses
+                      .split('\n')
+                      .map(a => a.trim())
+                      .filter(a => a.match(/^0x[a-fA-F0-9]{40}$/))
+
+                    if (addresses.length === 0) {
+                      alert('No valid addresses found')
+                      return
+                    }
+
+                    if (!selectedEventId) {
+                      alert('Please select an event first')
+                      return
+                    }
+
+                    if (!badgeImage) {
+                      alert('Please upload a badge image first')
+                      return
+                    }
+
+                    if (!confirm(`Mint badges to ${addresses.length} addresses?`)) {
+                      return
+                    }
+
+                    setMinting(true)
+                    setMintResult(null)
+
+                    try {
+                      const token = await getAccessToken()
+                      const res = await fetch('/api/nft/mint', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({
+                          eventId: selectedEventId,
+                          addresses,
+                          badgeType: parseInt(badgeType),
+                          badgeImage,
+                        }),
+                      })
+
+                      const data = await res.json()
+
+                      if (res.ok) {
+                        setMintResult(data)
+                        setManualAddresses('')
+                      } else {
+                        alert(`Error: ${data.error}`)
+                      }
+                    } catch (error) {
+                      console.error('Error minting badges:', error)
+                      alert('Failed to mint badges')
+                    } finally {
+                      setMinting(false)
+                    }
+                  }}
+                  disabled={!manualAddresses.trim() || minting || !selectedEventId}
+                  className="w-full"
+                  size="lg"
+                >
+                  {minting
+                    ? 'Minting...'
+                    : `🎁 Batch Mint to ${manualAddresses.split('\n').filter(a => a.trim().match(/^0x[a-fA-F0-9]{40}$/)).length} Addresses`}
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Mint Results */}
+        {mintResult && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Minting Results</CardTitle>
+              <CardDescription>
+                {mintResult.totalSuccess} successful, {mintResult.totalFailed} failed
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {mintResult.results.map((result: any, index: number) => (
+                  <div
+                    key={index}
+                    className={`p-3 border rounded-lg ${
+                      result.success ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-red-500 bg-red-50 dark:bg-red-950'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">
+                          {result.userName || result.address}
+                        </p>
+                        {result.success && result.txHash && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            TX: {result.txHash.slice(0, 10)}...{result.txHash.slice(-8)}
+                            {result.tokenId && ` • Token #${result.tokenId}`}
+                          </p>
+                        )}
+                        {!result.success && (
+                          <p className="text-xs text-red-600 mt-1">{result.error}</p>
+                        )}
+                      </div>
+                      <Badge variant={result.success ? "default" : "destructive"}>
+                        {result.success ? '✓ Success' : '✗ Failed'}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {events.length === 0 && (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">
+                No events with attendances found. Create an event and have users check in first.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </main>
+    </div>
+  )
+}

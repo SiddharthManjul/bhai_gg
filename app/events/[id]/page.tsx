@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import RSVPButton from '@/components/events/rsvp-button'
+import CheckInButton from '@/components/events/check-in-button'
 import { Calendar, MapPin, Users, Clock, ArrowLeft, CheckCircle, XCircle, User } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -340,6 +341,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                   )}
                 </CardContent>
               </Card>
+            )}
+
+            {/* Check-In Section - Only for ongoing/started events */}
+            {event.approvalStatus === 'APPROVED' && !isPast && canRSVP && (
+              <CheckInButton eventId={event.id} onCheckInSuccess={fetchEvent} />
             )}
           </div>
 

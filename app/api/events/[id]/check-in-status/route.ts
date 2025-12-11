@@ -15,7 +15,6 @@ import { calculateDistance } from '@/lib/gps'
  *   reason?: string,
  *   eventStarted: boolean,
  *   withinRadius: boolean,
- *   isAuthorized: boolean,
  *   alreadyCheckedIn: boolean,
  *   distance?: number
  * }
@@ -42,26 +41,19 @@ export async function GET(
     })
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      return NextResponse.json({
+        canCheckIn: false,
+        reason: 'Please complete your profile registration first',
+        isRegistered: false,
+      })
     }
 
     // Get event
     const event = await db.event.findUnique({
       where: { id: eventId },
       include: {
-        rsvps: {
-          where: { userId: user.id },
-        },
         attendances: {
           where: { userId: user.id },
-        },
-        guests: {
-          where: {
-            OR: [
-              { userId: user.id },
-              { email: user.email },
-            ],
-          },
         },
       },
     })
@@ -92,20 +84,12 @@ export async function GET(
       withinRadius = distance <= event.radius
     }
 
-    // Check authorization: User must have RSVP'd OR be approved guest
-    const hasRsvp = event.rsvps.length > 0 && event.rsvps[0].status === 'GOING'
-    const isApprovedGuest = event.guests.length > 0 &&
-                            event.guests[0].approvalStatus === 'APPROVED' &&
-                            event.guests[0].registrationStatus === 'REGISTERED'
-    const isAuthorized = hasRsvp || isApprovedGuest
-
-    // Determine if can check in
+    // Determine if can check in (no RSVP required anymore)
     const canCheckIn =
       eventApproved &&
       eventStarted &&
       !alreadyCheckedIn &&
-      withinRadius &&
-      isAuthorized
+      withinRadius
 
     let reason = ''
     if (!eventApproved) {
@@ -118,8 +102,6 @@ export async function GET(
       reason = 'Already checked in'
     } else if (!withinRadius && latitude && longitude) {
       reason = `You need to be within ${event.radius}m of the venue (currently ${Math.round(distance)}m away)`
-    } else if (!isAuthorized) {
-      reason = 'You need to RSVP as "Going" or be an approved guest'
     } else if (!latitude || !longitude) {
       reason = 'Location permission required'
     }
@@ -130,9 +112,9 @@ export async function GET(
       eventStarted,
       eventEnded: now > eventEnd,
       withinRadius,
-      isAuthorized,
       alreadyCheckedIn,
       eventApproved,
+      isRegistered: true,
       distance: Math.round(distance),
       requiredRadius: event.radius,
       eventDetails: {

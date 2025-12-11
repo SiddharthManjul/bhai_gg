@@ -39,7 +39,7 @@ export default function ProfileSetupPage() {
       })
 
       if (response.ok) {
-        router.push("/dashboard")
+        router.push("/profile")
         router.refresh()
       } else {
         console.error("Failed to update profile")

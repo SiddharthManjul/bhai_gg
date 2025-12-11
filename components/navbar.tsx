@@ -11,7 +11,7 @@ import { Menu, X } from 'lucide-react'
 
 export default function Navbar() {
   const pathname = usePathname()
-  const { authenticated, user, logout } = usePrivy()
+  const { authenticated, user, logout, getAccessToken } = usePrivy()
   const [isAdmin, setIsAdmin] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -38,7 +38,12 @@ export default function Navbar() {
 
   const checkIfHasEvents = async () => {
     try {
-      const res = await fetch(`/api/events?myEvents=true`)
+      const token = await getAccessToken()
+      const res = await fetch(`/api/events?myEvents=true`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       const data = await res.json()
       if (data.events && data.events.length > 0) {
         setHasEvents(true)
@@ -95,6 +100,7 @@ export default function Navbar() {
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/dashboard', label: 'Dashboard' },
+    { href: '/events', label: 'Events' },
     { href: '/map', label: 'Map' },
     { href: '/directory', label: 'Directory' },
     { href: '/profile', label: 'Profile' },

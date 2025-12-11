@@ -82,7 +82,6 @@ export default function Navbar() {
     { href: '/events', label: 'Events' },
     { href: '/map', label: 'Map' },
     { href: '/directory', label: 'Directory' },
-    { href: '/badges', label: 'My Badges' },
     { href: '/profile', label: 'Profile' },
   ]
 

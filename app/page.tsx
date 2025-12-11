@@ -61,9 +61,6 @@ export default function LandingPage() {
                   <Button asChild variant="outline" size="lg" className="text-lg">
                     <Link href="/events">Events</Link>
                   </Button>
-                  <Button asChild variant="outline" size="lg" className="text-lg">
-                    <Link href="/badges">My Badges</Link>
-                  </Button>
                   {isAdmin && (
                     <Button asChild variant="outline" size="lg" className="text-lg">
                       <Link href="/admin">Admin</Link>

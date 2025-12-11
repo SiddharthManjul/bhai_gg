@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getPrivyUserId } from '@/lib/auth'
-import { calculateDistance } from '@/lib/gps'
 
 /**
  * GET /api/events/[id]/check-in-status
  * Check if user can check in to an event
  *
- * Query params: ?latitude=X&longitude=Y
+ * No GPS required - QR code scan is sufficient
  *
  * Returns:
  * {
  *   canCheckIn: boolean,
  *   reason?: string,
  *   eventStarted: boolean,
- *   withinRadius: boolean,
- *   alreadyCheckedIn: boolean,
- *   distance?: number
+ *   alreadyCheckedIn: boolean
  * }
  */
 export async function GET(
@@ -31,9 +28,6 @@ export async function GET(
     }
 
     const { id: eventId } = await params
-    const searchParams = request.nextUrl.searchParams
-    const latitude = parseFloat(searchParams.get('latitude') || '0')
-    const longitude = parseFloat(searchParams.get('longitude') || '0')
 
     // Get user
     const user = await db.user.findUnique({
@@ -71,25 +65,11 @@ export async function GET(
     const alreadyCheckedIn = event.attendances.length > 0
     const eventApproved = event.approvalStatus === 'APPROVED'
 
-    let withinRadius = false
-    let distance = 0
-
-    if (latitude && longitude) {
-      distance = calculateDistance(
-        latitude,
-        longitude,
-        event.latitude,
-        event.longitude
-      )
-      withinRadius = distance <= event.radius
-    }
-
-    // Determine if can check in (no RSVP required anymore)
+    // Determine if can check in (no GPS required)
     const canCheckIn =
       eventApproved &&
       eventStarted &&
-      !alreadyCheckedIn &&
-      withinRadius
+      !alreadyCheckedIn
 
     let reason = ''
     if (!eventApproved) {
@@ -100,10 +80,6 @@ export async function GET(
       reason = 'Event has ended'
     } else if (alreadyCheckedIn) {
       reason = 'Already checked in'
-    } else if (!withinRadius && latitude && longitude) {
-      reason = `You need to be within ${event.radius}m of the venue (currently ${Math.round(distance)}m away)`
-    } else if (!latitude || !longitude) {
-      reason = 'Location permission required'
     }
 
     return NextResponse.json({
@@ -111,12 +87,9 @@ export async function GET(
       reason: canCheckIn ? undefined : reason,
       eventStarted,
       eventEnded: now > eventEnd,
-      withinRadius,
       alreadyCheckedIn,
       eventApproved,
       isRegistered: true,
-      distance: Math.round(distance),
-      requiredRadius: event.radius,
       eventDetails: {
         name: event.name,
         startTime: event.startTime,

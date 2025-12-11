@@ -31,6 +31,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => {
     if (!authenticated) {
+      // Save the current event page URL so we can redirect back after login
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('redirectAfterLogin', `/events/${id}`)
+      }
       router.push('/auth/signin')
       return
     }
@@ -250,9 +254,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     <MapPin className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <p className="font-medium">{event.location}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Check-in radius: {event.radius}m
-                      </p>
                     </div>
                   </div>
 
@@ -419,7 +420,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
 
                   <p className="text-xs text-muted-foreground text-center">
-                    Attendees scan the QR code and check in with GPS verification
+                    Attendees scan the QR code to check in to the event
                   </p>
                 </CardContent>
               </Card>

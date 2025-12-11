@@ -15,7 +15,14 @@ export default function SignInPage() {
   useEffect(() => {
     if (authenticated && pathname === '/auth/signin' && !redirectingRef.current) {
       redirectingRef.current = true
-      router.push('/profile')
+      // Check for saved redirect URL, otherwise go to profile
+      const redirectUrl = sessionStorage.getItem('redirectAfterLogin')
+      if (redirectUrl) {
+        sessionStorage.removeItem('redirectAfterLogin')
+        router.push(redirectUrl)
+      } else {
+        router.push('/profile')
+      }
     }
   }, [authenticated, pathname, router])
 

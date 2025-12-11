@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getPrivyUserId } from '@/lib/auth'
-import { calculateDistance } from '@/lib/gps'
 
 /**
  * POST /api/events/[id]/check-in
- * Self-service GPS-based event check-in
+ * Self-service QR code based event check-in
  *
  * Requirements:
  * 1. User must be registered
  * 2. Event must be approved and started
- * 3. User must be within event radius (default 100m)
+ *
+ * Note: GPS validation removed - QR code scan is sufficient for check-in
  */
 export async function POST(
   request: NextRequest,
@@ -24,15 +24,6 @@ export async function POST(
     }
 
     const { id: eventId } = await params
-    const body = await request.json()
-    const { latitude, longitude } = body
-
-    if (!latitude || !longitude) {
-      return NextResponse.json(
-        { error: 'GPS coordinates required' },
-        { status: 400 }
-      )
-    }
 
     // Get user
     const user = await db.user.findUnique({
@@ -79,7 +70,7 @@ export async function POST(
       )
     }
 
-    // Check 1: Event has started
+    // Check: Event has started
     const now = new Date()
     const eventStart = new Date(event.startTime)
     const eventEnd = new Date(event.endTime)
@@ -104,39 +95,19 @@ export async function POST(
       )
     }
 
-    // Check 2: GPS validation (within radius)
-    const distance = calculateDistance(
-      latitude,
-      longitude,
-      event.latitude,
-      event.longitude
-    )
-
-    if (distance > event.radius) {
-      return NextResponse.json(
-        {
-          error: `You are too far from the event location`,
-          distance: Math.round(distance),
-          required: event.radius,
-          message: `You need to be within ${event.radius}m of the venue to check in. You are currently ${Math.round(distance)}m away.`
-        },
-        { status: 400 }
-      )
-    }
-
-    // Create attendance record
+    // Create attendance record (no GPS data needed)
     const attendance = await db.eventAttendance.create({
       data: {
         eventId: event.id,
         userId: user.id,
-        latitude,
-        longitude,
-        distance,
+        latitude: 0, // No longer tracking GPS
+        longitude: 0,
+        distance: 0,
         checkedInAt: now,
       },
     })
 
-    // Update user's location and last active
+    // Update user's last active
     await db.user.update({
       where: { id: user.id },
       data: {
@@ -151,7 +122,6 @@ export async function POST(
         eventName: event.name,
         location: event.location,
         checkedInAt: attendance.checkedInAt,
-        distance: Math.round(distance),
       },
       message: `Successfully checked in to ${event.name}!`,
     })

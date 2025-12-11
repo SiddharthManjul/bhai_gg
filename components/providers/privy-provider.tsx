@@ -23,7 +23,17 @@ export function PrivyProvider({ children }: { children: React.ReactNode }) {
         supportedChains: [],
       }}
       onSuccess={() => {
-        router.push('/profile')
+        // Check if there's a saved redirect URL from before login
+        const redirectUrl = typeof window !== 'undefined'
+          ? sessionStorage.getItem('redirectAfterLogin')
+          : null
+
+        if (redirectUrl) {
+          sessionStorage.removeItem('redirectAfterLogin')
+          router.push(redirectUrl)
+        } else {
+          router.push('/profile')
+        }
       }}
     >
       {children}

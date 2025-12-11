@@ -5,7 +5,7 @@ import { usePrivy } from '@privy-io/react-auth'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { MapPin, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2, QrCode } from 'lucide-react'
 
 interface CheckInButtonProps {
   eventId: string
@@ -17,12 +17,9 @@ interface CheckInStatus {
   reason?: string
   eventStarted: boolean
   eventEnded: boolean
-  withinRadius: boolean
   alreadyCheckedIn: boolean
   eventApproved: boolean
   isRegistered?: boolean
-  distance: number
-  requiredRadius: number
   eventDetails: {
     name: string
     startTime: string
@@ -38,52 +35,15 @@ export default function CheckInButton({
   const { getAccessToken } = usePrivy()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [checkingStatus, setCheckingStatus] = useState(false)
+  const [checkingStatus, setCheckingStatus] = useState(true)
   const [status, setStatus] = useState<CheckInStatus | null>(null)
-  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null)
-  const [locationError, setLocationError] = useState<string>('')
   const [checkInSuccess, setCheckInSuccess] = useState(false)
 
-  // Get user's location
+  // Check status on mount
   useEffect(() => {
-    if ('geolocation' in navigator) {
-      setCheckingStatus(true)
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          })
-          setLocationError('')
-          setCheckingStatus(false)
-        },
-        (error) => {
-          console.error('Location error:', error)
-          setLocationError(
-            error.code === 1
-              ? 'Location permission denied. Please enable location access to check in.'
-              : 'Unable to get your location. Please try again.'
-          )
-          setCheckingStatus(false)
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 30000,
-          maximumAge: 0,
-        }
-      )
-    } else {
-      setLocationError('Geolocation is not supported by your browser')
-    }
-  }, [])
-
-  // Check status when location is available
-  useEffect(() => {
-    if (location && !checkInSuccess) {
-      checkStatus()
-    }
+    checkStatus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, eventId])
+  }, [eventId])
 
   // Auto-refresh status every 10 seconds while event is ongoing
   useEffect(() => {
@@ -98,18 +58,13 @@ export default function CheckInButton({
   }, [status, checkInSuccess])
 
   const checkStatus = async () => {
-    if (!location) return
-
     try {
       const token = await getAccessToken()
-      const res = await fetch(
-        `/api/events/${eventId}/check-in-status?latitude=${location.latitude}&longitude=${location.longitude}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
+      const res = await fetch(`/api/events/${eventId}/check-in-status`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
       if (res.ok) {
         const data = await res.json()
@@ -117,15 +72,12 @@ export default function CheckInButton({
       }
     } catch (error) {
       console.error('Error checking status:', error)
+    } finally {
+      setCheckingStatus(false)
     }
   }
 
   const handleCheckIn = async () => {
-    if (!location) {
-      setLocationError('Location not available')
-      return
-    }
-
     setLoading(true)
 
     try {
@@ -136,10 +88,7 @@ export default function CheckInButton({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          latitude: location.latitude,
-          longitude: location.longitude,
-        }),
+        body: JSON.stringify({}),
       })
 
       const data = await res.json()
@@ -166,23 +115,9 @@ export default function CheckInButton({
         <CardContent className="py-6">
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Getting your location...</span>
+            <span>Loading check-in status...</span>
           </div>
         </CardContent>
-      </Card>
-    )
-  }
-
-  if (locationError) {
-    return (
-      <Card className="border-yellow-500">
-        <CardHeader>
-          <CardTitle className="text-yellow-600 flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Location Required
-          </CardTitle>
-          <CardDescription>{locationError}</CardDescription>
-        </CardHeader>
       </Card>
     )
   }
@@ -197,7 +132,7 @@ export default function CheckInButton({
       <Card className="border-yellow-500">
         <CardHeader>
           <CardTitle className="text-yellow-600 flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+            <QrCode className="h-5 w-5" />
             Registration Required
           </CardTitle>
           <CardDescription>
@@ -222,7 +157,7 @@ export default function CheckInButton({
             Checked In Successfully!
           </CardTitle>
           <CardDescription className="text-green-700 dark:text-green-300">
-            You are checked in to {status.eventDetails.name}
+            You are checked in to {status.eventDetails.name}. You can now claim your NFT badge from the &quot;My Badges&quot; page.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -252,7 +187,7 @@ export default function CheckInButton({
     <Card className={status.canCheckIn ? 'border-primary' : ''}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <MapPin className="h-5 w-5" />
+          <QrCode className="h-5 w-5" />
           Event Check-In
         </CardTitle>
         <CardDescription>
@@ -268,22 +203,10 @@ export default function CheckInButton({
             {status.eventStarted ? (
               <CheckCircle2 className="h-4 w-4 text-green-500" />
             ) : (
-              <XCircle className="h-4 w-4 text-gray-400" />
+              <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
             )}
             <span className={status.eventStarted ? 'text-green-600' : 'text-muted-foreground'}>
-              Event Started
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {status.withinRadius ? (
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-            ) : (
-              <XCircle className="h-4 w-4 text-gray-400" />
-            )}
-            <span className={status.withinRadius ? 'text-green-600' : 'text-muted-foreground'}>
-              Within {status.requiredRadius}m of venue
-              {!status.withinRadius && ` (${status.distance}m away)`}
+              Event {status.eventStarted ? 'is ongoing' : 'not started yet'}
             </span>
           </div>
         </div>
@@ -302,7 +225,7 @@ export default function CheckInButton({
             </>
           ) : (
             <>
-              <MapPin className="h-4 w-4 mr-2" />
+              <CheckCircle2 className="h-4 w-4 mr-2" />
               Check In to Event
             </>
           )}
@@ -311,12 +234,6 @@ export default function CheckInButton({
         {!status.canCheckIn && status.reason && (
           <p className="text-sm text-muted-foreground text-center">
             {status.reason}
-          </p>
-        )}
-
-        {status.canCheckIn && (
-          <p className="text-xs text-muted-foreground text-center">
-            Your location will be verified when you check in
           </p>
         )}
       </CardContent>

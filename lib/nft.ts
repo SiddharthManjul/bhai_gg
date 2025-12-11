@@ -1,6 +1,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, decodeEventLog } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { BhaiBadgeABI } from './nft-abi'
+import { db } from './db'
 
 // Monad Testnet configuration
 const MONAD_TESTNET_CHAIN = {
@@ -84,6 +85,9 @@ export async function mintBadge({
       }
     }
 
+    console.log('🔗 Minting NFT to:', recipientAddress)
+    console.log('📝 Metadata URI length:', metadataUri.length)
+
     // Simulate the transaction first to catch errors
     const { request } = await publicClient.simulateContract({
       address: CONTRACT_ADDRESS,
@@ -162,6 +166,9 @@ export async function batchMintBadges(
     const metadataUris = badges.map((b) => b.metadataUri)
     const eventIds = badges.map((b) => b.eventId)
 
+    console.log('📦 Batch minting to', badges.length, 'recipients')
+    console.log('📝 Metadata URI lengths:', metadataUris.map(u => u.length))
+
     // Simulate the transaction first
     const { request } = await publicClient.simulateContract({
       address: CONTRACT_ADDRESS,
@@ -222,52 +229,49 @@ export async function batchMintBadges(
   }
 }
 
+const badgeTypeNames = {
+  [BadgeType.STARTER]: 'Starter',
+  [BadgeType.ACTIVE]: 'Active',
+  [BadgeType.VETERAN]: 'Veteran',
+  [BadgeType.ELITE]: 'Elite',
+  [BadgeType.EVENT_ATTENDANCE]: 'Event Attendance',
+  [BadgeType.MEETUP]: 'Meetup',
+}
+
 /**
  * Generate metadata URI for a badge
+ * Stores metadata in database and returns a short URI
  */
-export function generateMetadataUri(
+export async function generateMetadataUri(
   eventName: string,
   eventDate: Date,
   badgeType: BadgeType,
   imageData?: string // Can be base64 data URI or URL
-): string {
-  const badgeTypeNames = {
-    [BadgeType.STARTER]: 'Starter',
-    [BadgeType.ACTIVE]: 'Active',
-    [BadgeType.VETERAN]: 'Veteran',
-    [BadgeType.ELITE]: 'Elite',
-    [BadgeType.EVENT_ATTENDANCE]: 'Event Attendance',
-    [BadgeType.MEETUP]: 'Meetup',
-  }
+): Promise<string> {
+  const name = `${eventName} - ${badgeTypeNames[badgeType]}`
+  const description = `Badge for attending ${eventName} on ${eventDate.toLocaleDateString()}`
+  const image = imageData || `https://bhai.gg/badges/${badgeType}.png`
+  const attributes = [
+    { trait_type: 'Event', value: eventName },
+    { trait_type: 'Date', value: eventDate.toISOString() },
+    { trait_type: 'Badge Type', value: badgeTypeNames[badgeType] },
+    { trait_type: 'Platform', value: 'Bhai.gg' },
+  ]
 
-  const metadata = {
-    name: `${eventName} - ${badgeTypeNames[badgeType]}`,
-    description: `Badge for attending ${eventName} on ${eventDate.toLocaleDateString()}`,
-    // Use custom image if provided (base64 or URL), otherwise fallback
-    image: imageData || `https://bhai.gg/badges/${badgeType}.png`,
-    attributes: [
-      {
-        trait_type: 'Event',
-        value: eventName,
-      },
-      {
-        trait_type: 'Date',
-        value: eventDate.toISOString(),
-      },
-      {
-        trait_type: 'Badge Type',
-        value: badgeTypeNames[badgeType],
-      },
-      {
-        trait_type: 'Platform',
-        value: 'Bhai.gg',
-      },
-    ],
-  }
+  // Store metadata in database
+  const metadata = await db.nftMetadata.create({
+    data: {
+      name,
+      description,
+      image,
+      attributes,
+    },
+  })
 
-  // Encode metadata as base64url for URL-safe storage
-  const metadataId = Buffer.from(JSON.stringify(metadata)).toString('base64url')
-  return `https://bhai.gg/api/nft/metadata/${metadataId}`
+  console.log('📝 Stored metadata with ID:', metadata.id)
+
+  // Return short URI with database ID
+  return `https://bhai.gg/api/nft/metadata/${metadata.id}`
 }
 
 /**

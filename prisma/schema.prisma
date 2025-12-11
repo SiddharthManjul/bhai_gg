@@ -304,6 +304,16 @@ enum BadgeType {
   MEETUP
 }
 
+// NFT Metadata storage (for on-chain reference)
+model NftMetadata {
+  id        String   @id @default(cuid())
+  name      String
+  description String
+  image     String   @db.Text // Can store base64 or URL
+  attributes Json     // Store attributes as JSON
+  createdAt DateTime @default(now())
+}
+
 // Report Model
 model Report {
   id         String       @id @default(cuid())

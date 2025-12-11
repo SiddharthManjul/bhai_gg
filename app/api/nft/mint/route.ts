@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getPrivyUserId } from '@/lib/auth'
 import { mintBadge, batchMintBadges, BadgeType, generateMetadataUri } from '@/lib/nft'
+import { BadgeType as PrismaBadgeType } from '@/generated/prisma/client'
+
+// Map numeric BadgeType to Prisma enum
+const badgeTypeToEnum: Record<number, PrismaBadgeType> = {
+  [BadgeType.STARTER]: 'STARTER',
+  [BadgeType.ACTIVE]: 'ACTIVE',
+  [BadgeType.VETERAN]: 'VETERAN',
+  [BadgeType.ELITE]: 'ELITE',
+  [BadgeType.EVENT_ATTENDANCE]: 'EVENT_ATTENDANCE',
+  [BadgeType.MEETUP]: 'MEETUP',
+}
 
 // POST /api/nft/mint - Mint badges for event attendees (admin only)
 export async function POST(request: NextRequest) {
@@ -81,13 +92,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate metadata URI with custom image
-    const metadataUri = generateMetadataUri(
+    // Generate metadata URI with custom image (now async, stores in DB)
+    const metadataUri = await generateMetadataUri(
       event.name,
       new Date(event.startTime),
       badgeType as BadgeType,
       badgeImage // Pass the custom badge image
     )
+
+    console.log('📝 Generated metadata URI:', metadataUri)
 
     let mintParams: Array<{
       recipientAddress: string
@@ -219,7 +232,7 @@ export async function POST(request: NextRequest) {
           await db.badge.create({
             data: {
               userId: user.userId,
-              type: badgeType,
+              type: badgeTypeToEnum[badgeType as number] || 'EVENT_ATTENDANCE',
               nftMinted: true,
               txHash: result.txHash,
               tokenId: result.tokenId?.toString(),

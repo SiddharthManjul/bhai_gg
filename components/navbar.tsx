@@ -11,16 +11,13 @@ import { Menu, X } from 'lucide-react'
 
 export default function Navbar() {
   const pathname = usePathname()
-  const { authenticated, user, logout, getAccessToken } = usePrivy()
+  const { authenticated, user, logout } = usePrivy()
   const [isAdmin, setIsAdmin] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
-  const [hasEvents, setHasEvents] = useState(false)
 
   useEffect(() => {
     if (user?.email?.address) {
       checkIfAdmin()
-      checkIfHasEvents()
     }
   }, [user])
 
@@ -33,23 +30,6 @@ export default function Navbar() {
       }
     } catch (error) {
       console.error('Error checking admin status:', error)
-    }
-  }
-
-  const checkIfHasEvents = async () => {
-    try {
-      const token = await getAccessToken()
-      const res = await fetch(`/api/events?myEvents=true`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      const data = await res.json()
-      if (data.events && data.events.length > 0) {
-        setHasEvents(true)
-      }
-    } catch (error) {
-      console.error('Error checking events:', error)
     }
   }
 
@@ -99,20 +79,15 @@ export default function Navbar() {
   // Authenticated navigation
   const navLinks = [
     { href: '/', label: 'Home' },
-    { href: '/dashboard', label: 'Dashboard' },
     { href: '/events', label: 'Events' },
     { href: '/map', label: 'Map' },
     { href: '/directory', label: 'Directory' },
+    { href: '/badges', label: 'My Badges' },
     { href: '/profile', label: 'Profile' },
   ]
 
   if (isAdmin) {
     navLinks.push({ href: '/admin', label: 'Admin' })
-  }
-
-  // Show Badges link for admins OR event creators
-  if (isAdmin || hasEvents) {
-    navLinks.push({ href: '/admin/badges', label: 'Badges' })
   }
 
   return (

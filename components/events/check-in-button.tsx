@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { MapPin, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
@@ -17,9 +18,9 @@ interface CheckInStatus {
   eventStarted: boolean
   eventEnded: boolean
   withinRadius: boolean
-  isAuthorized: boolean
   alreadyCheckedIn: boolean
   eventApproved: boolean
+  isRegistered?: boolean
   distance: number
   requiredRadius: number
   eventDetails: {
@@ -35,6 +36,7 @@ export default function CheckInButton({
   onCheckInSuccess,
 }: CheckInButtonProps) {
   const { getAccessToken } = usePrivy()
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState(false)
   const [status, setStatus] = useState<CheckInStatus | null>(null)
@@ -189,6 +191,28 @@ export default function CheckInButton({
     return null
   }
 
+  // Not registered - prompt to register
+  if (status.isRegistered === false) {
+    return (
+      <Card className="border-yellow-500">
+        <CardHeader>
+          <CardTitle className="text-yellow-600 flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Registration Required
+          </CardTitle>
+          <CardDescription>
+            Please complete your profile registration to check in to events.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={() => router.push('/profile')} className="w-full">
+            Complete Registration
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (checkInSuccess || status.alreadyCheckedIn) {
     return (
       <Card className="border-green-500 bg-green-50 dark:bg-green-950">
@@ -260,17 +284,6 @@ export default function CheckInButton({
             <span className={status.withinRadius ? 'text-green-600' : 'text-muted-foreground'}>
               Within {status.requiredRadius}m of venue
               {!status.withinRadius && ` (${status.distance}m away)`}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {status.isAuthorized ? (
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-            ) : (
-              <XCircle className="h-4 w-4 text-gray-400" />
-            )}
-            <span className={status.isAuthorized ? 'text-green-600' : 'text-muted-foreground'}>
-              RSVP Confirmed
             </span>
           </div>
         </div>

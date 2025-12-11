@@ -23,7 +23,21 @@ interface Event {
   name: string
   location: string
   startTime: string
-  attendances: Attendance[]
+  rsvps?: Rsvp[]
+  attendances?: Attendance[]
+}
+
+interface Rsvp {
+  id: string
+  userId: string
+  status: 'GOING' | 'NOT_GOING'
+  user: {
+    id: string
+    name: string
+    email: string
+    walletAddress: string | null
+    profileImage: string | null
+  }
 }
 
 interface Attendance {
@@ -78,22 +92,26 @@ export default function AdminBadgesPage() {
   const checkAdminAndFetchEvents = async () => {
     try {
       // Check user role by fetching profile
+      console.log('👤 Checking user profile for:', user?.email?.address)
       const res = await fetch(`/api/profile?email=${user?.email?.address}`)
 
       if (!res.ok) {
+        console.error('Profile fetch failed:', res.status)
         router.push('/')
         return
       }
 
       const data = await res.json()
+      console.log('👤 Profile data:', data)
 
       // Admins have full access, event creators can access their own events
-      if (data.user && data.user.role === 'ADMIN') {
-        setIsAdmin(true)
-      }
+      const userIsAdmin = data.user && data.user.role === 'ADMIN'
+      console.log('👤 Is admin:', userIsAdmin)
+      setIsAdmin(userIsAdmin)
       // Note: Non-admins can still access this page to mint badges for their own events
 
-      await fetchEvents()
+      console.log('🔄 Fetching events with admin status:', userIsAdmin)
+      await fetchEvents(userIsAdmin)
     } catch (error) {
       console.error('Error checking user status:', error)
       router.push('/')
@@ -102,10 +120,23 @@ export default function AdminBadgesPage() {
     }
   }
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (adminStatus?: boolean) => {
     try {
       const token = await getAccessToken()
-      const res = await fetch('/api/events?myEvents=true', {
+
+      // Admins can see all events, non-admins only see their own events
+      // Use the passed adminStatus or fall back to isAdmin state
+      const shouldFetchAll = adminStatus !== undefined ? adminStatus : isAdmin
+
+      // Always include attendances and myEvents parameter for proper filtering
+      const endpoint = shouldFetchAll
+        ? '/api/events?includeAttendances=true'
+        : '/api/events?myEvents=true&includeAttendances=true'
+
+      console.log('🔗 Fetching from endpoint:', endpoint)
+      console.log('🔗 Should fetch all events:', shouldFetchAll)
+
+      const res = await fetch(endpoint, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -113,11 +144,23 @@ export default function AdminBadgesPage() {
 
       if (res.ok) {
         const data = await res.json()
-        // Only show events that have attendances
-        const eventsWithAttendances = data.events.filter(
-          (e: Event) => e.attendances && e.attendances.length > 0
-        )
-        setEvents(eventsWithAttendances)
+        console.log('📊 Fetched events:', data.events)
+        console.log('📊 Total events returned:', data.events?.length || 0)
+
+        // Show events that have RSVPs (people going)
+        const eventsWithRsvps = data.events.filter((e: Event) => {
+          const goingRsvps = e.rsvps?.filter(r => r.status === 'GOING') || []
+          return goingRsvps.length > 0
+        })
+
+        console.log('📊 Events with RSVPs:', eventsWithRsvps.length)
+        console.log('📊 Filtered events:', eventsWithRsvps)
+
+        setEvents(eventsWithRsvps)
+      } else {
+        console.error('Failed to fetch events:', res.status, res.statusText)
+        const errorData = await res.json().catch(() => ({}))
+        console.error('Error response:', errorData)
       }
     } catch (error) {
       console.error('Error fetching events:', error)
@@ -173,22 +216,20 @@ export default function AdminBadgesPage() {
   const selectAll = () => {
     if (!selectedEvent) return
 
-    const eligibleAttendees = selectedEvent.attendances.filter(
-      (a) => a.user.walletAddress && !a.nftMinted
-    )
+    const goingRsvps = selectedEvent.rsvps?.filter(r => r.status === 'GOING') || []
+    const eligibleRsvps = goingRsvps.filter((r) => r.user.walletAddress)
 
-    setSelectedAttendees(new Set(eligibleAttendees.map((a) => a.userId)))
+    setSelectedAttendees(new Set(eligibleRsvps.map((r) => r.userId)))
   }
 
   const autoSelectAllAttendees = () => {
     if (!selectedEvent) return
 
-    // Auto-select ALL attendees with wallet addresses (including already minted)
-    const allWithWallets = selectedEvent.attendances.filter(
-      (a) => a.user.walletAddress
-    )
+    // Auto-select ALL RSVPs with wallet addresses
+    const goingRsvps = selectedEvent.rsvps?.filter(r => r.status === 'GOING') || []
+    const allWithWallets = goingRsvps.filter((r) => r.user.walletAddress)
 
-    setSelectedAttendees(new Set(allWithWallets.map((a) => a.userId)))
+    setSelectedAttendees(new Set(allWithWallets.map((r) => r.userId)))
   }
 
   const deselectAll = () => {
@@ -255,16 +296,15 @@ export default function AdminBadgesPage() {
     return null
   }
 
-  const eligibleCount = selectedEvent?.attendances.filter(
-    (a) => a.user.walletAddress && !a.nftMinted
+  // Get RSVPs who are going
+  const goingRsvps = selectedEvent?.rsvps?.filter(r => r.status === 'GOING') || []
+
+  const eligibleCount = goingRsvps.filter(
+    (r) => r.user.walletAddress
   ).length || 0
 
-  const alreadyMintedCount = selectedEvent?.attendances.filter(
-    (a) => a.nftMinted
-  ).length || 0
-
-  const noWalletCount = selectedEvent?.attendances.filter(
-    (a) => !a.user.walletAddress
+  const noWalletCount = goingRsvps.filter(
+    (r) => !r.user.walletAddress
   ).length || 0
 
   return (
@@ -303,7 +343,7 @@ export default function AdminBadgesPage() {
                   <SelectContent>
                     {events.map((event) => (
                       <SelectItem key={event.id} value={event.id}>
-                        {event.name} ({event.attendances.length} attendees)
+                        {event.name} ({event.rsvps?.filter(r => r.status === 'GOING').length || 0} RSVPs)
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -362,8 +402,8 @@ export default function AdminBadgesPage() {
                   {selectedEvent.location} • {new Date(selectedEvent.startTime).toLocaleDateString()}
                 </p>
                 <div className="flex gap-4 mt-3 text-sm">
-                  <span>✅ {eligibleCount} eligible</span>
-                  <span>🎫 {alreadyMintedCount} already minted</span>
+                  <span>✅ {eligibleCount} with wallet</span>
+                  <span>👥 {goingRsvps.length} total RSVPs</span>
                   <span>⚠️ {noWalletCount} no wallet</span>
                 </div>
               </div>
@@ -386,9 +426,9 @@ export default function AdminBadgesPage() {
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle>Select Attendees</CardTitle>
+                        <CardTitle>Select RSVPs</CardTitle>
                         <CardDescription>
-                          Choose attendees to receive badges ({selectedAttendees.size} selected)
+                          Choose people who RSVP'd to receive badges ({selectedAttendees.size} selected)
                         </CardDescription>
                       </div>
                     </div>
@@ -399,7 +439,7 @@ export default function AdminBadgesPage() {
                         onClick={autoSelectAllAttendees}
                         disabled={!selectedEvent}
                       >
-                        ⚡ Auto-Select All Attendees
+                        ⚡ Auto-Select All with Wallets
                       </Button>
                       <Button
                         variant="outline"
@@ -407,7 +447,7 @@ export default function AdminBadgesPage() {
                         onClick={selectAll}
                         disabled={eligibleCount === 0}
                       >
-                        Select Eligible Only
+                        Select With Wallets Only
                       </Button>
                       <Button
                         variant="outline"
@@ -422,17 +462,17 @@ export default function AdminBadgesPage() {
                 </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {selectedEvent.attendances.map((attendance) => {
-                  const isEligible = attendance.user.walletAddress && !attendance.nftMinted
-                  const isSelected = selectedAttendees.has(attendance.userId)
+                {goingRsvps.map((rsvp) => {
+                  const isEligible = !!rsvp.user.walletAddress
+                  const isSelected = selectedAttendees.has(rsvp.userId)
 
                   return (
                     <div
-                      key={attendance.id}
+                      key={rsvp.id}
                       className={`flex items-center justify-between p-3 border rounded-lg ${
                         isSelected ? 'border-primary bg-primary/5' : ''
                       } ${!isEligible ? 'opacity-50' : 'cursor-pointer hover:bg-muted/50'}`}
-                      onClick={() => isEligible && toggleAttendee(attendance.userId)}
+                      onClick={() => isEligible && toggleAttendee(rsvp.userId)}
                     >
                       <div className="flex items-center gap-3">
                         <input
@@ -442,29 +482,26 @@ export default function AdminBadgesPage() {
                           disabled={!isEligible}
                           className="h-4 w-4"
                         />
-                        {attendance.user.profileImage && (
+                        {rsvp.user.profileImage && (
                           <img
-                            src={attendance.user.profileImage}
-                            alt={attendance.user.name}
+                            src={rsvp.user.profileImage}
+                            alt={rsvp.user.name}
                             className="h-10 w-10 rounded-full object-cover"
                           />
                         )}
                         <div>
-                          <p className="font-medium">{attendance.user.name}</p>
+                          <p className="font-medium">{rsvp.user.name}</p>
                           <p className="text-sm text-muted-foreground">
-                            {attendance.user.email}
+                            {rsvp.user.email}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {attendance.nftMinted && (
-                          <Badge variant="default">Minted ✓</Badge>
-                        )}
-                        {!attendance.user.walletAddress && (
+                        {!rsvp.user.walletAddress && (
                           <Badge variant="secondary">No Wallet</Badge>
                         )}
-                        {attendance.user.walletAddress && !attendance.nftMinted && (
-                          <Badge variant="outline">Eligible</Badge>
+                        {rsvp.user.walletAddress && (
+                          <Badge variant="outline">Ready</Badge>
                         )}
                       </div>
                     </div>
@@ -633,7 +670,7 @@ export default function AdminBadgesPage() {
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground">
-                No events with attendances found. Create an event and have users check in first.
+                No events with RSVPs found. Create an event and have users RSVP first.
               </p>
             </CardContent>
           </Card>

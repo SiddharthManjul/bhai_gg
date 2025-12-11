@@ -39,11 +39,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get event details
+    // Get event details with both attendances and RSVPs
     const event = await db.event.findUnique({
       where: { id: eventId },
       include: {
         attendances: {
+          include: {
+            user: true,
+          },
+        },
+        rsvps: {
+          where: { status: 'GOING' },
           include: {
             user: true,
           },
@@ -90,7 +96,14 @@ export async function POST(request: NextRequest) {
       eventId: string
     }> = []
 
-    let attendeesWithWallets: typeof event.attendances = []
+    // Track users with their source (RSVP or attendance) and data
+    let selectedUsers: Array<{
+      userId: string
+      userName: string
+      walletAddress: string
+      source: 'rsvp' | 'attendance'
+      attendanceId?: string
+    }> = []
 
     // Handle manual addresses
     if (addresses && Array.isArray(addresses)) {
@@ -113,50 +126,63 @@ export async function POST(request: NextRequest) {
         eventId: event.id,
       }))
     }
-    // Handle attendee IDs
+    // Handle attendee IDs (can be from RSVPs or attendances)
     else if (attendeeIds && Array.isArray(attendeeIds)) {
-      // Get attendees with wallet addresses
-      const attendees = event.attendances.filter((attendance) =>
-        attendeeIds.includes(attendance.userId)
-      )
+      console.log('🔍 Looking up user IDs:', attendeeIds)
+      console.log('📊 Available RSVPs:', event.rsvps.length)
+      console.log('📊 Available attendances:', event.attendances.length)
 
-      if (attendees.length === 0) {
+      // First, try to find users in RSVPs (most common case now)
+      const rsvpUsers = event.rsvps
+        .filter((rsvp) => attendeeIds.includes(rsvp.userId))
+        .filter((rsvp) => rsvp.user.walletAddress)
+        .map((rsvp) => ({
+          userId: rsvp.userId,
+          userName: rsvp.user.name || 'Unknown User',
+          walletAddress: rsvp.user.walletAddress!,
+          source: 'rsvp' as const,
+        }))
+
+      console.log('✅ Found RSVP users with wallets:', rsvpUsers.length)
+
+      // Then, find users in attendances (for users who already checked in)
+      const attendanceUsers = event.attendances
+        .filter((attendance) => attendeeIds.includes(attendance.userId))
+        .filter((attendance) => attendance.user.walletAddress)
+        .filter((attendance) => !attendance.nftMinted) // Skip already minted for attendances
+        .map((attendance) => ({
+          userId: attendance.userId,
+          userName: attendance.user.name || 'Unknown User',
+          walletAddress: attendance.user.walletAddress!,
+          source: 'attendance' as const,
+          attendanceId: attendance.id,
+        }))
+
+      console.log('✅ Found attendance users with wallets:', attendanceUsers.length)
+
+      // Combine both sources, preferring attendance if user exists in both
+      const userMap = new Map<string, typeof selectedUsers[0]>()
+
+      // Add RSVP users first
+      rsvpUsers.forEach((user) => userMap.set(user.userId, user))
+
+      // Override with attendance users if they exist (they have more complete data)
+      attendanceUsers.forEach((user) => userMap.set(user.userId, user))
+
+      selectedUsers = Array.from(userMap.values())
+
+      console.log('📦 Total selected users:', selectedUsers.length)
+
+      if (selectedUsers.length === 0) {
         return NextResponse.json(
-          { error: 'No attendees found with the provided IDs' },
-          { status: 400 }
-        )
-      }
-
-      // Filter attendees who have wallet addresses
-      attendeesWithWallets = attendees.filter(
-        (attendance) => attendance.user.walletAddress
-      )
-
-      if (attendeesWithWallets.length === 0) {
-        return NextResponse.json(
-          { error: 'None of the selected attendees have wallet addresses' },
-          { status: 400 }
-        )
-      }
-
-      // Check if badges already minted (skip for manual addresses)
-      const alreadyMinted = attendeesWithWallets.filter(
-        (attendance) => attendance.nftMinted
-      )
-
-      if (alreadyMinted.length > 0) {
-        return NextResponse.json(
-          {
-            error: `${alreadyMinted.length} attendee(s) already have badges minted`,
-            alreadyMinted: alreadyMinted.map((a) => a.userId),
-          },
+          { error: 'None of the selected users have wallet addresses' },
           { status: 400 }
         )
       }
 
       // Prepare minting parameters
-      mintParams = attendeesWithWallets.map((attendance) => ({
-        recipientAddress: attendance.user.walletAddress!,
+      mintParams = selectedUsers.map((user) => ({
+        recipientAddress: user.walletAddress,
         badgeType: badgeType as BadgeType,
         metadataUri,
         eventId: event.id,
@@ -166,32 +192,42 @@ export async function POST(request: NextRequest) {
     // Execute batch mint
     const { results, totalSuccess, totalFailed } = await batchMintBadges(mintParams)
 
+    console.log('🎉 Minting results:', { totalSuccess, totalFailed })
+
     // Update database with minting results (only for attendee IDs, not manual addresses)
-    if (attendeeIds && attendeesWithWallets.length > 0) {
-      const updatePromises = attendeesWithWallets.map(async (attendance, index) => {
+    if (attendeeIds && selectedUsers.length > 0) {
+      const updatePromises = selectedUsers.map(async (user, index) => {
         const result = results[index]
 
         if (result.success) {
-          // Update attendance record
-          await db.eventAttendance.update({
-            where: { id: attendance.id },
-            data: {
-              nftMinted: true,
-              txHash: result.txHash,
-              tokenId: result.tokenId?.toString(),
-            },
-          })
+          console.log(`✅ Minting succeeded for ${user.userName}, updating database...`)
 
-          // Create badge record
+          // If user came from attendance, update the attendance record
+          if (user.source === 'attendance' && user.attendanceId) {
+            await db.eventAttendance.update({
+              where: { id: user.attendanceId },
+              data: {
+                nftMinted: true,
+                txHash: result.txHash,
+                tokenId: result.tokenId?.toString(),
+              },
+            })
+            console.log(`📝 Updated attendance record for ${user.userName}`)
+          }
+
+          // Always create badge record
           await db.badge.create({
             data: {
-              userId: attendance.userId,
+              userId: user.userId,
               type: badgeType,
               nftMinted: true,
               txHash: result.txHash,
               tokenId: result.tokenId?.toString(),
             },
           })
+          console.log(`🏅 Created badge record for ${user.userName}`)
+        } else {
+          console.log(`❌ Minting failed for ${user.userName}:`, result.error)
         }
       })
 
@@ -220,8 +256,9 @@ export async function POST(request: NextRequest) {
         totalSuccess,
         totalFailed,
         results: results.map((r, i) => ({
-          userId: attendeesWithWallets[i].userId,
-          userName: attendeesWithWallets[i].user.name,
+          userId: selectedUsers[i].userId,
+          userName: selectedUsers[i].userName,
+          source: selectedUsers[i].source,
           success: r.success,
           txHash: r.txHash,
           tokenId: r.tokenId?.toString(),

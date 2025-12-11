@@ -58,7 +58,7 @@ export default function LandingPage() {
               {authenticated ? (
                 <>
                   <Button asChild size="lg" className="text-lg">
-                    <Link href="/dashboard">Go to Dashboard</Link>
+                    <Link href="/profile">Go to Profile</Link>
                   </Button>
                   <Button asChild variant="outline" size="lg" className="text-lg">
                     <Link href="/directory">Browse Directory</Link>
@@ -182,7 +182,7 @@ export default function LandingPage() {
           </p>
           {authenticated ? (
             <Button asChild size="lg">
-              <Link href="/dashboard">Go to Dashboard</Link>
+              <Link href="/profile">Go to Profile</Link>
             </Button>
           ) : (
             <Button asChild size="lg">

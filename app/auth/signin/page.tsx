@@ -15,7 +15,7 @@ export default function SignInPage() {
   useEffect(() => {
     if (authenticated && pathname === '/auth/signin' && !redirectingRef.current) {
       redirectingRef.current = true
-      router.push('/dashboard')
+      router.push('/profile')
     }
   }, [authenticated, pathname, router])
 

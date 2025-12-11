@@ -326,7 +326,17 @@ export default function DirectoryPage() {
                           rel="noopener noreferrer"
                           className="text-blue-500 hover:underline truncate"
                         >
-                          Profile
+                          {(() => {
+                            // Extract username from LinkedIn URL
+                            const url = member.linkedIn
+                            // Match patterns like linkedin.com/in/username or /in/username
+                            const match = url.match(/(?:linkedin\.com\/in\/|\/in\/)([^\/\?]+)/)
+                            if (match) return `@${match[1]}`
+                            // If no /in/ pattern, try to get last segment
+                            const segments = url.replace(/\/$/, '').split('/')
+                            const lastSegment = segments[segments.length - 1]
+                            return lastSegment && lastSegment !== 'linkedin.com' ? `@${lastSegment}` : url
+                          })()}
                         </a>
                       </div>
                     )}

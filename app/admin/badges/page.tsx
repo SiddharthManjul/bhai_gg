@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @next/next/no-img-element */
 "use client"
@@ -428,7 +429,7 @@ export default function AdminBadgesPage() {
                       <div>
                         <CardTitle>Select RSVPs</CardTitle>
                         <CardDescription>
-                          Choose people who RSVP'd to receive badges ({selectedAttendees.size} selected)
+                          Choose people who RSVP&apos;d to receive badges ({selectedAttendees.size} selected)
                         </CardDescription>
                       </div>
                     </div>
@@ -632,35 +633,77 @@ export default function AdminBadgesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {mintResult.results.map((result: any, index: number) => (
-                  <div
-                    key={index}
-                    className={`p-3 border rounded-lg ${
-                      result.success ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-red-500 bg-red-50 dark:bg-red-950'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
+              <div className="space-y-3">
+                {mintResult.results.map((result: any, index: number) => {
+                  const explorerUrl = result.txHash
+                    ? `https://testnet.monadvision.com/tx/${result.txHash}`
+                    : null
+
+                  const twitterText = result.success && selectedEvent
+                    ? `I just received an NFT badge for attending "${selectedEvent.name}" on @bhai_gg! 🎉\n\nPowered by @moaborig\n\n${explorerUrl || ''}`
+                    : ''
+
+                  const twitterUrl = twitterText
+                    ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(twitterText)}`
+                    : ''
+
+                  return (
+                    <div
+                      key={index}
+                      className={`p-4 border rounded-lg ${
+                        result.success ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-red-500 bg-red-50 dark:bg-red-950'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
                         <p className="font-medium truncate">
                           {result.userName || result.address}
                         </p>
-                        {result.success && result.txHash && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            TX: {result.txHash.slice(0, 10)}...{result.txHash.slice(-8)}
-                            {result.tokenId && ` • Token #${result.tokenId}`}
-                          </p>
-                        )}
-                        {!result.success && (
-                          <p className="text-xs text-red-600 mt-1">{result.error}</p>
-                        )}
+                        <Badge variant={result.success ? "default" : "destructive"}>
+                          {result.success ? '✓ Minted' : '✗ Failed'}
+                        </Badge>
                       </div>
-                      <Badge variant={result.success ? "default" : "destructive"}>
-                        {result.success ? '✓ Success' : '✗ Failed'}
-                      </Badge>
+
+                      {result.success && result.txHash && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">TX:</span>
+                            <code className="bg-muted px-2 py-0.5 rounded text-xs">
+                              {result.txHash.slice(0, 10)}...{result.txHash.slice(-8)}
+                            </code>
+                            {result.tokenId && (
+                              <span className="text-muted-foreground">
+                                • Token #{result.tokenId}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            <a
+                              href={explorerUrl || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors"
+                            >
+                              🔍 View on Explorer
+                            </a>
+                            <a
+                              href={twitterUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-black hover:bg-gray-800 text-white rounded-md transition-colors"
+                            >
+                              𝕏 Share on Twitter
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {!result.success && (
+                        <p className="text-sm text-red-600 mt-1">{result.error}</p>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </CardContent>
           </Card>

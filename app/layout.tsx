@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { DynamicProvider } from "@/components/providers/dynamic-provider";
+import { NotificationProvider } from "@/components/notification-provider";
 import Navbar from "@/components/navbar";
 
 export const metadata: Metadata = {
@@ -17,8 +18,10 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <DynamicProvider>
-          <Navbar />
-          {children}
+          <NotificationProvider>
+            <Navbar />
+            {children}
+          </NotificationProvider>
         </DynamicProvider>
       </body>
     </html>

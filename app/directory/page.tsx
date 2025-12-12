@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable react-hooks/exhaustive-deps */
@@ -32,6 +32,9 @@ interface DirectoryUser {
   linkedIn: string | null
   role: "ADMIN" | "CONTRIBUTOR" | "USER"
   createdAt: string
+  _count: {
+    badges: number
+  }
 }
 
 interface Filters {
@@ -265,90 +268,100 @@ export default function DirectoryPage() {
         ) : (
           <div className="grid gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filteredUsers.map((member) => (
-              <Card key={member.id} className="hover:shadow-lg transition-shadow">
+              <Card
+                key={member.id}
+                className="hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer h-full"
+                onClick={() => router.push(`/profile/${member.id}`)}
+              >
                 <CardHeader className="p-4 sm:p-6">
-                  <div className="flex items-start gap-4">
-                    {member.profileImage && (
-                      <img
-                        src={member.profileImage}
-                        alt={member.name || 'User'}
-                        className="h-12 w-12 sm:h-16 sm:w-16 rounded-full object-cover border-2 border-muted shrink-0"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-lg">
-                          {member.name || 'Anonymous'}
-                        </CardTitle>
-                        <Badge variant={getRoleBadgeVariant(member.role) as any} className="shrink-0">
-                          {member.role}
-                        </Badge>
+                    <div className="flex items-start gap-4">
+                      {member.profileImage && (
+                        <img
+                          src={member.profileImage}
+                          alt={member.name || 'User'}
+                          className="h-12 w-12 sm:h-16 sm:w-16 rounded-full object-cover border-2 border-muted shrink-0"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <CardTitle className="text-lg">
+                            {member.name || 'Anonymous'}
+                          </CardTitle>
+                          <Badge variant={getRoleBadgeVariant(member.role) as any} className="shrink-0">
+                            {member.role}
+                          </Badge>
+                        </div>
+                        <CardDescription className="flex items-center gap-2 mt-1">
+                          {member.city && member.country ? (
+                            <span>{member.city}, {member.country}</span>
+                          ) : member.country ? (
+                            <span>{member.country}</span>
+                          ) : (
+                            <span className="text-muted-foreground">Location not set</span>
+                          )}
+                        </CardDescription>
                       </div>
-                      <CardDescription className="flex items-center gap-2 mt-1">
-                        {member.city && member.country ? (
-                          <span>{member.city}, {member.country}</span>
-                        ) : member.country ? (
-                          <span>{member.country}</span>
-                        ) : (
-                          <span className="text-muted-foreground">Location not set</span>
-                        )}
-                      </CardDescription>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4 p-4 sm:p-6">
-                  {member.bio && (
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {member.bio}
-                    </p>
-                  )}
-
-                  <div className="flex flex-col gap-2 text-sm">
-                    {member.xHandle && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">X:</span>
-                        <a
-                          href={`https://x.com/${member.xHandle.replace('@', '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:underline"
-                        >
-                          {member.xHandle}
-                        </a>
-                      </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4 p-4 sm:p-6">
+                    {member.bio && (
+                      <p className="text-sm text-muted-foreground line-clamp-3">
+                        {member.bio}
+                      </p>
                     )}
-                    {member.linkedIn && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">LinkedIn:</span>
-                        <a
-                          href={member.linkedIn.startsWith('http') ? member.linkedIn : `https://${member.linkedIn}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:underline truncate"
-                        >
-                          {(() => {
-                            // Extract username from LinkedIn URL
-                            const url = member.linkedIn
-                            // Match patterns like linkedin.com/in/username or /in/username
-                            const match = url.match(/(?:linkedin\.com\/in\/|\/in\/)([^\/\?]+)/)
-                            if (match) return `@${match[1]}`
-                            // If no /in/ pattern, try to get last segment
-                            const segments = url.replace(/\/$/, '').split('/')
-                            const lastSegment = segments[segments.length - 1]
-                            return lastSegment && lastSegment !== 'linkedin.com' ? `@${lastSegment}` : url
-                          })()}
-                        </a>
-                      </div>
-                    )}
-                  </div>
 
-                  <div className="pt-2 border-t">
-                    <p className="text-xs text-muted-foreground">
-                      Member since {new Date(member.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+                    <div className="flex flex-col gap-2 text-sm">
+                      {member.xHandle && (
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">X:</span>
+                          <a
+                            href={`https://x.com/${member.xHandle.replace('@', '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {member.xHandle}
+                          </a>
+                        </div>
+                      )}
+                      {member.linkedIn && (
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">LinkedIn:</span>
+                          <a
+                            href={member.linkedIn.startsWith('http') ? member.linkedIn : `https://${member.linkedIn}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline truncate"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {(() => {
+                              // Extract username from LinkedIn URL
+                              const url = member.linkedIn
+                              // Match patterns like linkedin.com/in/username or /in/username
+                              const match = url.match(/(?:linkedin\.com\/in\/|\/in\/)([^\/\?]+)/)
+                              if (match) return `@${match[1]}`
+                              // If no /in/ pattern, try to get last segment
+                              const segments = url.replace(/\/$/, '').split('/')
+                              const lastSegment = segments[segments.length - 1]
+                              return lastSegment && lastSegment !== 'linkedin.com' ? `@${lastSegment}` : url
+                            })()}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Member since {new Date(member.createdAt).toLocaleDateString()}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium text-muted-foreground">Badges:</span>
+                        <span className="text-sm font-semibold">{member._count.badges}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
             ))}
           </div>
         )}

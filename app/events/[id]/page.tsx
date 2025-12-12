@@ -26,8 +26,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [event, setEvent] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [badgeImagePreview, setBadgeImagePreview] = useState<string>('')
-  const [uploadingBadge, setUploadingBadge] = useState(false)
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [showQrCode, setShowQrCode] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -162,58 +160,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const getTwitterShareUrl = (eventName: string, txHash: string) => {
     const text = `I just claimed my NFT badge for attending "${eventName}" on @bhai_gg! 🎉\n\nPowered by @monad_xyz\n\n${getExplorerUrl(txHash)}`
     return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
-  }
-
-  const handleBadgeImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      showError('Please select an image file')
-      return
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      showError('Image size must be less than 5MB')
-      return
-    }
-
-    // Convert to base64
-    const reader = new FileReader()
-    reader.onloadend = async () => {
-      const base64String = reader.result as string
-      setBadgeImagePreview(base64String)
-
-      // Upload to server
-      setUploadingBadge(true)
-      try {
-        const token = await getAccessToken()
-        const res = await fetch(`/api/events/${id}/badge-image`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ badgeImage: base64String }),
-        })
-
-        if (res.ok) {
-          showSuccess('Badge image saved! Attendees can now claim their NFT badges.', 'Success')
-          fetchEvent()
-        } else {
-          const data = await res.json()
-          showError(data.error || 'Failed to save badge image', 'Error')
-        }
-      } catch (error) {
-        console.error('Error uploading badge image:', error)
-        showError('Failed to upload badge image', 'Error')
-      } finally {
-        setUploadingBadge(false)
-      }
-    }
-    reader.readAsDataURL(file)
   }
 
   const generateQRCode = async () => {
@@ -712,50 +658,37 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               </Card>
             )}
 
-            {/* NFT Badge Setup - Only for event creator/admin */}
+            {/* NFT Badge - Only for event creator/admin */}
             {(event.canManage || isAdmin) && (
               <Card>
                 <CardHeader>
-                  <CardTitle>NFT Badge Setup</CardTitle>
+                  <CardTitle>NFT Badge</CardTitle>
                   <CardDescription>
-                    Upload a badge image for attendees to mint as NFT
+                    Auto-generated badge for attendees to mint as NFT
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {(event.badgeImage || badgeImagePreview) && (
+                  {event.badgeImage && (
                     <div className="flex justify-center">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={badgeImagePreview || event.badgeImage}
-                        alt="Badge preview"
-                        className="h-32 w-32 object-contain border-2 border-muted rounded-lg"
+                        src={event.badgeImage}
+                        alt="NFT Badge"
+                        className="h-48 w-48 object-contain border-2 border-muted rounded-lg"
                       />
                     </div>
                   )}
 
-                  <div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleBadgeImageUpload}
-                      disabled={uploadingBadge}
-                      className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer disabled:opacity-50"
-                    />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {uploadingBadge ? 'Uploading...' : 'PNG, JPG, GIF, WebP - Max 5MB'}
-                    </p>
-                  </div>
-
                   {event.badgeImage ? (
                     <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
                       <p className="text-sm text-green-700 dark:text-green-300">
-                        ✓ Badge image set! Attendees who check in can claim their NFT from &quot;My Badges&quot; page.
+                        ✓ Badge auto-generated! Approve attendees below to allow them to claim their NFT.
                       </p>
                     </div>
                   ) : (
-                    <div className="p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                      <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                        ⚠️ Upload a badge image to enable NFT claiming for attendees.
+                    <div className="p-3 bg-muted border rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        Badge will be generated automatically when event is created.
                       </p>
                     </div>
                   )}

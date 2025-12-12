@@ -13,6 +13,19 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Validate LinkedIn URL format if provided
+    if (linkedIn && linkedIn.trim() !== '') {
+      // LinkedIn personal profiles use /in/ globally (not a country code)
+      // Also accept country-specific domains like uk.linkedin.com, in.linkedin.com, etc.
+      const linkedInRegex = /^(https?:\/\/)?([\w]{2,3}\.)?linkedin\.com\/in\/[\w\-\.%]+\/?(\?.*)?$/i
+      if (!linkedInRegex.test(linkedIn.trim())) {
+        return NextResponse.json(
+          { error: "Invalid LinkedIn profile URL. Format: linkedin.com/in/your-profile or https://www.linkedin.com/in/your-profile" },
+          { status: 400 }
+        )
+      }
+    }
+
     // Upsert user - create if doesn't exist, update if exists
     const user = await prisma.user.upsert({
       where: { email },

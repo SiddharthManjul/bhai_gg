@@ -132,6 +132,10 @@ export default function ProfilePage() {
     txHash: string | null
     tokenId: string | null
     awardedAt: string
+    event?: {
+      id: string
+      name: string
+    } | null
   }
 
   const [badges, setBadges] = useState<UserBadge[]>([])
@@ -431,6 +435,17 @@ export default function ProfilePage() {
       return
     }
 
+    // Validate LinkedIn URL format if provided
+    if (formData.linkedIn && formData.linkedIn.trim() !== '') {
+      // LinkedIn personal profiles use /in/ globally (not a country code)
+      // Also accept country-specific domains like uk.linkedin.com, in.linkedin.com, etc.
+      const linkedInRegex = /^(https?:\/\/)?([\w]{2,3}\.)?linkedin\.com\/in\/[\w\-\.%]+\/?(\?.*)?$/i
+      if (!linkedInRegex.test(formData.linkedIn.trim())) {
+        showError('Invalid LinkedIn profile URL. Format: linkedin.com/in/your-profile or https://www.linkedin.com/in/your-profile', 'Validation Error')
+        return
+      }
+    }
+
     // Combine phone country code and number (extract code from "code|country" format)
     const actualCode = phoneCountryCode.split('|')[0]
     const fullPhone = phoneNumber ? `${actualCode}${phoneNumber}` : ''
@@ -646,14 +661,21 @@ export default function ProfilePage() {
                       className="p-3 border rounded-lg bg-linear-to-br from-purple-50 to-indigo-50 dark:from-purple-950 dark:to-indigo-950"
                     >
                       <div className="flex flex-col gap-2">
+                        {badge.event && (
+                          <p className="text-base font-bold">
+                            {badge.event.name}
+                          </p>
+                        )}
+
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium px-2 py-1 bg-secondary rounded">
+                          <span className="text-xs text-muted-foreground">
                             {badge.type.replace('_', ' ')}
                           </span>
                           {badge.nftMinted && (
-                            <span className="text-xs text-green-600 dark:text-green-400">✓</span>
+                            <span className="text-xs text-green-600 dark:text-green-400">✓ Minted</span>
                           )}
                         </div>
+
                         <p className="text-xs text-muted-foreground">
                           {new Date(badge.awardedAt).toLocaleDateString()}
                         </p>

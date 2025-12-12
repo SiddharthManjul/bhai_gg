@@ -23,6 +23,14 @@ export async function GET(request: NextRequest) {
     // Get user's badges
     const badges = await db.badge.findMany({
       where: { userId: user.id },
+      include: {
+        event: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
       orderBy: { awardedAt: 'desc' },
     })
 

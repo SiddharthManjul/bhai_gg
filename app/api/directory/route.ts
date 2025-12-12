@@ -41,6 +41,11 @@ export async function GET(req: NextRequest) {
         linkedIn: true,
         role: true,
         createdAt: true,
+        _count: {
+          select: {
+            badges: true,
+          },
+        },
       },
     })
 

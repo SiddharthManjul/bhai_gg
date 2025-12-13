@@ -65,6 +65,7 @@ model User {
   emailVerified DateTime?
   name          String?
   bio           String?
+  skills        String[]  @default([]) // User skills (multiple allowed)
   profileImage  String?
 
   // Location (latitude/longitude stored for GPS verification but only city shown publicly)

@@ -102,11 +102,8 @@ export default function MyBadgesPage() {
     }
   }
 
-  const getExplorerUrl = (txHash: string) =>
-    `https://testnet.monadvision.com/tx/${txHash}`
-
-  const getTwitterShareUrl = (eventName: string, txHash: string) => {
-    const text = `I just claimed my NFT badge for attending "${eventName}" on @bhai_gg! 🎉\n\nPowered by @monad_xyz\n\n${getExplorerUrl(txHash)}`
+  const getTwitterShareUrl = (eventName: string) => {
+    const text = `I just claimed my NFT badge for attending "${eventName}" on @bhai_gg! 🎉\n\nPowered by @monad_xyz`
     return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
   }
 
@@ -143,27 +140,16 @@ export default function MyBadgesPage() {
                     Badge Minted Successfully!
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <a
-                    href={getExplorerUrl(mintSuccess.txHash)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors"
-                  >
-                    🔍 View on Explorer
-                  </a>
-                  <a
-                    href={getTwitterShareUrl(
-                      claimableEvents.find(e => e.id === mintSuccess.eventId)?.name || 'Event',
-                      mintSuccess.txHash
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-black hover:bg-gray-800 text-white rounded-md transition-colors"
-                  >
-                    𝕏 Share on Twitter
-                  </a>
-                </div>
+                <a
+                  href={getTwitterShareUrl(
+                    claimableEvents.find(e => e.id === mintSuccess.eventId)?.name || 'Event'
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-black hover:bg-gray-800 text-white rounded-md transition-colors w-fit"
+                >
+                  𝕏 Share on Twitter
+                </a>
               </div>
             </CardContent>
           </Card>
@@ -250,24 +236,14 @@ export default function MyBadgesPage() {
                     </p>
 
                     {badge.txHash && (
-                      <div className="flex flex-wrap gap-2">
-                        <a
-                          href={getExplorerUrl(badge.txHash)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
-                        >
-                          🔍 Explorer
-                        </a>
-                        <a
-                          href={getTwitterShareUrl(badge.type.replace('_', ' '), badge.txHash)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-black hover:bg-gray-800 text-white rounded transition-colors"
-                        >
-                          𝕏 Share
-                        </a>
-                      </div>
+                      <a
+                        href={getTwitterShareUrl(badge.type.replace('_', ' '))}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-black hover:bg-gray-800 text-white rounded transition-colors w-fit"
+                      >
+                        𝕏 Share
+                      </a>
                     )}
 
                     {badge.tokenId && (

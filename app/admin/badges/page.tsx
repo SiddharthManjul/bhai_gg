@@ -639,12 +639,8 @@ export default function AdminBadgesPage() {
             <CardContent>
               <div className="space-y-3">
                 {mintResult.results.map((result: any, index: number) => {
-                  const explorerUrl = result.txHash
-                    ? `https://testnet.monadvision.com/tx/${result.txHash}`
-                    : null
-
                   const twitterText = result.success && selectedEvent
-                    ? `I just received an NFT badge for attending "${selectedEvent.name}" on @bhai_gg! 🎉\n\nPowered by @moaborig\n\n${explorerUrl || ''}`
+                    ? `I just received an NFT badge for attending "${selectedEvent.name}" on @bhai_gg! 🎉\n\nPowered by @monad_xyz`
                     : ''
 
                   const twitterUrl = twitterText
@@ -681,20 +677,12 @@ export default function AdminBadgesPage() {
                             )}
                           </div>
 
-                          <div className="flex flex-wrap gap-2 mt-3">
-                            <a
-                              href={explorerUrl || '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors"
-                            >
-                              🔍 View on Explorer
-                            </a>
+                          <div className="mt-3">
                             <a
                               href={twitterUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-black hover:bg-gray-800 text-white rounded-md transition-colors"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-black hover:bg-gray-800 text-white rounded-md transition-colors w-fit"
                             >
                               𝕏 Share on Twitter
                             </a>

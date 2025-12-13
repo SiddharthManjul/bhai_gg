@@ -5,6 +5,13 @@ import fs from 'fs'
 
 export async function generateEventBadgeImage(eventName: string): Promise<string> {
   try {
+    // Register Noto Sans font for proper text rendering
+    const fontPath = path.join(
+      process.cwd(),
+      'node_modules/next/dist/compiled/@vercel/og/noto-sans-v27-latin-regular.ttf'
+    )
+    registerFont(fontPath, { family: 'Noto Sans' })
+
     // Load background image
     const bgPath = path.join(process.cwd(), 'public', 'bhai_bg.jpeg')
     const background = await loadImage(bgPath)
@@ -23,7 +30,7 @@ export async function generateEventBadgeImage(eventName: string): Promise<string
 
     // Calculate font size based on canvas width (responsive)
     const baseFontSize = Math.floor(canvas.width / 15)
-    ctx.font = `bold ${baseFontSize}px Arial, sans-serif`
+    ctx.font = `bold ${baseFontSize}px "Noto Sans"`
 
     // Add semi-transparent background for better text readability
     ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'
@@ -65,7 +72,7 @@ export async function generateEventBadgeImage(eventName: string): Promise<string
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
     const bottomTextSize = Math.floor(canvas.width / 25)
-    ctx.font = `${bottomTextSize}px Arial, sans-serif`
+    ctx.font = `${bottomTextSize}px "Noto Sans"`
 
     // Draw "Bhai Cabal" in bottom left corner with padding
     const padding = 40

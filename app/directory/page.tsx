@@ -25,6 +25,7 @@ interface DirectoryUser {
   id: string
   name: string | null
   bio: string | null
+  skills: string[]
   profileImage: string | null
   country: string | null
   city: string | null
@@ -40,6 +41,7 @@ interface DirectoryUser {
 interface Filters {
   countries: string[]
   cities: string[]
+  skills: string[]
 }
 
 export default function DirectoryPage() {
@@ -48,12 +50,13 @@ export default function DirectoryPage() {
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<DirectoryUser[]>([])
   const [filteredUsers, setFilteredUsers] = useState<DirectoryUser[]>([])
-  const [filters, setFilters] = useState<Filters>({ countries: [], cities: [] })
+  const [filters, setFilters] = useState<Filters>({ countries: [], cities: [], skills: [] })
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCountry, setSelectedCountry] = useState<string>('all')
   const [selectedCity, setSelectedCity] = useState<string>('all')
+  const [selectedSkill, setSelectedSkill] = useState<string>('all')
 
   useEffect(() => {
     if (user) {
@@ -67,7 +70,7 @@ export default function DirectoryPage() {
   // Apply filters whenever search query or filters change
   useEffect(() => {
     applyFilters()
-  }, [searchQuery, selectedCountry, selectedCity, users])
+  }, [searchQuery, selectedCountry, selectedCity, selectedSkill, users])
 
   const fetchDirectory = async () => {
     try {
@@ -116,6 +119,11 @@ export default function DirectoryPage() {
       filtered = filtered.filter(user => user.city === selectedCity)
     }
 
+    // Apply skill filter
+    if (selectedSkill && selectedSkill !== 'all') {
+      filtered = filtered.filter(user => Array.isArray(user.skills) && user.skills.includes(selectedSkill))
+    }
+
     setFilteredUsers(filtered)
   }
 
@@ -123,6 +131,7 @@ export default function DirectoryPage() {
     setSearchQuery('')
     setSelectedCountry('all')
     setSelectedCity('all')
+    setSelectedSkill('all')
   }
 
   const getRoleBadgeVariant = (role: string) => {
@@ -191,7 +200,7 @@ export default function DirectoryPage() {
                   {filteredUsers.length !== users.length && ` (filtered from ${users.length} total)`}
                 </CardDescription>
               </div>
-              {(searchQuery || selectedCountry !== 'all' || selectedCity !== 'all') && (
+              {(searchQuery || selectedCountry !== 'all' || selectedCity !== 'all' || selectedSkill !== 'all') && (
                 <Button variant="outline" size="sm" onClick={clearFilters} className="w-full sm:w-auto">
                   Clear Filters
                 </Button>
@@ -241,6 +250,24 @@ export default function DirectoryPage() {
                     {filters.cities.map((city) => (
                       <SelectItem key={city} value={city}>
                         {city}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Skill Filter */}
+              <div className="space-y-2">
+                <Label htmlFor="skill">Skill</Label>
+                <Select value={selectedSkill} onValueChange={setSelectedSkill}>
+                  <SelectTrigger id="skill">
+                    <SelectValue placeholder="All skills" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All skills</SelectItem>
+                    {filters.skills.map((skill) => (
+                      <SelectItem key={skill} value={skill}>
+                        {skill}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -308,6 +335,19 @@ export default function DirectoryPage() {
                       <p className="text-sm text-muted-foreground line-clamp-3">
                         {member.bio}
                       </p>
+                    )}
+
+                    {Array.isArray(member.skills) && member.skills.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {member.skills.map((skill: string, index: number) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-md"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
                     )}
 
                     <div className="flex flex-col gap-2 text-sm">

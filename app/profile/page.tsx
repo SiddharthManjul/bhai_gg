@@ -113,6 +113,7 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState({
     name: '',
     bio: '',
+    skills: [] as string[],
     city: '',
     state: '',
     country: '',
@@ -122,6 +123,7 @@ export default function ProfilePage() {
     walletAddress: '',
     profileImage: '',
   })
+  const [skillInput, setSkillInput] = useState('')
   const [imagePreview, setImagePreview] = useState<string>('')
 
   // Badges state
@@ -201,6 +203,7 @@ export default function ProfilePage() {
         setFormData({
           name: data.user.name || '',
           bio: data.user.bio || '',
+          skills: data.user.skills || [],
           city: data.user.city || '',
           state: data.user.state || '',
           country: data.user.country || '',
@@ -500,11 +503,8 @@ export default function ProfilePage() {
   }
 
   // Badge helper functions
-  const getExplorerUrl = (txHash: string) =>
-    `https://testnet.monadvision.com/tx/${txHash}`
-
-  const getTwitterShareUrl = (badgeType: string, txHash: string) => {
-    const text = `I just collected my "${badgeType.replace('_', ' ')}" badge on @bhai_gg! 🎉\n\nPowered by @monad_xyz\n\n${getExplorerUrl(txHash)}`
+  const getTwitterShareUrl = (badgeType: string) => {
+    const text = `I just collected my "${badgeType.replace('_', ' ')}" badge on @bhai_gg! 🎉\n\nPowered by @monad_xyz`
     return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
   }
 
@@ -565,6 +565,21 @@ export default function ProfilePage() {
                   <div className="sm:col-span-2">
                     <dt className="text-sm font-medium text-muted-foreground">Bio</dt>
                     <dd className="mt-1 text-sm">{formData.bio}</dd>
+                  </div>
+                )}
+                {formData.skills && formData.skills.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-sm font-medium text-muted-foreground">Skills</dt>
+                    <dd className="mt-2 flex flex-wrap gap-2">
+                      {formData.skills.map((skill, index) => (
+                        <span
+                          key={index}
+                          className="px-2 py-1 bg-primary text-primary-foreground text-xs rounded-md"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </dd>
                   </div>
                 )}
                 {formData.xHandle && (
@@ -681,24 +696,14 @@ export default function ProfilePage() {
                         </p>
 
                         {badge.txHash && (
-                          <div className="flex flex-col gap-1.5">
-                            <a
-                              href={getExplorerUrl(badge.txHash)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
-                            >
-                              🔍 View on Explorer
-                            </a>
-                            <a
-                              href={getTwitterShareUrl(badge.type, badge.txHash)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-black hover:bg-gray-800 text-white rounded transition-colors"
-                            >
-                              𝕏 Share on Twitter
-                            </a>
-                          </div>
+                          <a
+                            href={getTwitterShareUrl(badge.type)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-black hover:bg-gray-800 text-white rounded transition-colors w-fit"
+                          >
+                            𝕏 Share on Twitter
+                          </a>
                         )}
 
                         {badge.tokenId && (
@@ -812,6 +817,52 @@ export default function ProfilePage() {
                   placeholder="Tell us about yourself..."
                   rows={3}
                 />
+              </div>
+
+              {/* Skills */}
+              <div className="space-y-2">
+                <Label htmlFor="skills">Skills</Label>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2 min-h-10 p-2 border rounded-md">
+                    {formData.skills.map((skill, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-foreground text-sm rounded-md"
+                      >
+                        <span>{skill}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newSkills = formData.skills.filter((_, i) => i !== index)
+                            setFormData({ ...formData, skills: newSkills })
+                          }}
+                          className="hover:bg-primary/80 rounded-sm p-0.5"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <Input
+                    id="skills"
+                    value={skillInput}
+                    onChange={(e) => setSkillInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const trimmedSkill = skillInput.trim()
+                        if (trimmedSkill && !formData.skills.includes(trimmedSkill)) {
+                          setFormData({ ...formData, skills: [...formData.skills, trimmedSkill] })
+                          setSkillInput('')
+                        }
+                      }
+                    }}
+                    placeholder="Type a skill and press Enter..."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Press Enter to add skills (e.g., React, TypeScript, Design)
+                  </p>
+                </div>
               </div>
 
               {/* Location - Searchable Dropdown Selection */}

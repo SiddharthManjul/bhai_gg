@@ -99,11 +99,11 @@ export default function CheckInButton({
         // Refresh status to update UI
         await checkStatus()
       } else {
-        alert(data.error || 'Failed to check in')
+        alert(data.error || 'Failed to claim badge')
       }
     } catch (error) {
-      console.error('Error checking in:', error)
-      alert('Failed to check in. Please try again.')
+      console.error('Error claiming badge:', error)
+      alert('Failed to claim badge. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -115,7 +115,7 @@ export default function CheckInButton({
         <CardContent className="py-6">
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Loading check-in status...</span>
+            <span>Loading badge claim status...</span>
           </div>
         </CardContent>
       </Card>
@@ -136,7 +136,7 @@ export default function CheckInButton({
             Registration Required
           </CardTitle>
           <CardDescription>
-            Please complete your profile registration to check in to events.
+            Please complete your profile registration to claim event badges.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -154,10 +154,10 @@ export default function CheckInButton({
         <CardHeader>
           <CardTitle className="text-green-600 flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5" />
-            Checked In Successfully!
+            Badge Claim Recorded!
           </CardTitle>
           <CardDescription className="text-green-700 dark:text-green-300">
-            You are checked in to {status.eventDetails.name}. You can now claim your NFT badge from the &quot;My Badges&quot; page.
+            You have claimed your badge for {status.eventDetails.name}. The event host will approve you for NFT minting soon.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -188,12 +188,12 @@ export default function CheckInButton({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <QrCode className="h-5 w-5" />
-          Event Check-In
+          Claim Event Badge
         </CardTitle>
         <CardDescription>
           {status.eventStarted
-            ? 'You can check in now'
-            : `Check-in opens at ${new Date(status.eventDetails.startTime).toLocaleString()}`}
+            ? 'You can claim your badge now'
+            : `Badge claiming opens at ${new Date(status.eventDetails.startTime).toLocaleString()}`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -211,7 +211,7 @@ export default function CheckInButton({
           </div>
         </div>
 
-        {/* Check-In Button */}
+        {/* Claim Badge Button */}
         <Button
           onClick={handleCheckIn}
           disabled={!status.canCheckIn || loading}
@@ -221,12 +221,12 @@ export default function CheckInButton({
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Checking In...
+              Claiming Badge...
             </>
           ) : (
             <>
               <CheckCircle2 className="h-4 w-4 mr-2" />
-              Check In to Event
+              Claim Badge
             </>
           )}
         </Button>

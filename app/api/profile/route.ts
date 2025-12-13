@@ -4,7 +4,7 @@ import prisma from "@/lib/db"
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { authUserId, email, name, bio, city, state, country, latitude, longitude, xHandle, linkedIn, phone, walletAddress, profileImage } = body
+    const { authUserId, email, name, bio, skills, city, state, country, latitude, longitude, xHandle, linkedIn, phone, walletAddress, profileImage } = body
 
     if (!authUserId || !email) {
       return NextResponse.json(
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
         privyId: authUserId, // Update privyId for existing users
         name,
         bio,
+        skills: skills || [],
         city,
         state,
         country,
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
         email,
         name,
         bio,
+        skills: skills || [],
         city,
         state,
         country,
@@ -93,6 +95,7 @@ export async function GET(req: NextRequest) {
         email: true,
         name: true,
         bio: true,
+        skills: true,
         city: true,
         state: true,
         country: true,

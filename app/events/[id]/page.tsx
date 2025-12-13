@@ -154,17 +154,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
-  const getExplorerUrl = (txHash: string) =>
-    `https://testnet.monadvision.com/tx/${txHash}`
-
-  const getTwitterShareUrl = (eventName: string, txHash: string) => {
-    const text = `I just claimed my NFT badge for attending "${eventName}" on @bhai_gg! 🎉\n\nPowered by @monad_xyz\n\n${getExplorerUrl(txHash)}`
+  const getTwitterShareUrl = (eventName: string) => {
+    const text = `I just claimed my NFT badge for attending "${eventName}" on @bhai_gg! 🎉\n\nPowered by @monad_xyz`
     return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
   }
 
   const generateQRCode = async () => {
     try {
-      // Generate QR code with the event check-in URL
+      // Generate QR code with the event badge claim URL
       const checkInUrl = `${window.location.origin}/events/${id}`
       const qrDataUrl = await QRCode.toDataURL(checkInUrl, {
         width: 300,
@@ -348,7 +345,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     <Users className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <p className="font-medium">
-                        {event.attendances?.length || 0} checked in
+                        {event.attendances?.length || 0} attendees claimed badges
                         {event.maxAttendees && ` / ${event.maxAttendees} max`}
                       </p>
                     </div>
@@ -357,54 +354,20 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               </CardContent>
             </Card>
 
-            {/* Check-In Section - Show for approved events that haven't ended */}
-            {event.approvalStatus === 'APPROVED' && !isPast && (
+            {/* Badge Claiming Section - Show for approved events that haven't ended */}
+            {event.approvalStatus === 'APPROVED' && !isPast && !event.userAttendance && (
               <CheckInButton eventId={event.id} onCheckInSuccess={fetchEvent} />
-            )}
-
-            {/* Badge Minting Success Alert */}
-            {badgeMintSuccess && (
-              <Card className="border-green-500 bg-green-50 dark:bg-green-950">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">🎉</span>
-                      <p className="font-semibold text-green-700 dark:text-green-300">
-                        Badge Minted Successfully!
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <a
-                        href={getExplorerUrl(badgeMintSuccess)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors"
-                      >
-                        🔍 View on Explorer
-                      </a>
-                      <a
-                        href={getTwitterShareUrl(event.name, badgeMintSuccess)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-black hover:bg-gray-800 text-white rounded-md transition-colors"
-                      >
-                        𝕏 Share on Twitter
-                      </a>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             )}
 
             {/* Badge Claiming Section - Show if user has checked in */}
             {event.approvalStatus === 'APPROVED' && event.userAttendance && (
-              <Card className={badgeAlreadyClaimed ? 'border-green-500' : canClaimBadge ? 'border-primary' : 'border-yellow-500'}>
+              <Card className={(badgeAlreadyClaimed || badgeMintSuccess) ? 'border-green-500 bg-green-50 dark:bg-green-950' : canClaimBadge ? 'border-primary' : 'border-yellow-500'}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    🎁 NFT Badge
+                    {(badgeAlreadyClaimed || badgeMintSuccess) ? '🎉' : '🎁'} NFT Badge
                   </CardTitle>
-                  <CardDescription>
-                    {badgeAlreadyClaimed
+                  <CardDescription className={(badgeAlreadyClaimed || badgeMintSuccess) ? 'text-green-700 dark:text-green-300' : ''}>
+                    {(badgeAlreadyClaimed || badgeMintSuccess)
                       ? 'You have claimed your NFT badge for this event!'
                       : event.userAttendance.approvedForMinting
                       ? 'Claim your NFT badge for attending this event'
@@ -412,10 +375,20 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {badgeAlreadyClaimed ? (
-                    <div className="flex items-center gap-2 text-green-600">
-                      <Check className="h-5 w-5" />
-                      <span className="font-medium">Badge Claimed</span>
+                  {(badgeAlreadyClaimed || badgeMintSuccess) ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-2 text-green-600">
+                        <Check className="h-5 w-5" />
+                        <span className="font-medium">Badge Claimed Successfully!</span>
+                      </div>
+                      <a
+                        href={getTwitterShareUrl(event.name)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-black hover:bg-gray-800 text-white rounded-md transition-colors w-fit"
+                      >
+                        𝕏 Share on Twitter
+                      </a>
                     </div>
                   ) : event.userAttendance.approvedForMinting ? (
                     <Button
@@ -429,7 +402,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                   ) : (
                     <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                       <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                        ⏳ Your check-in has been recorded. The event host will approve you for NFT minting soon.
+                        ⏳ Waiting for event host approval to claim your NFT badge.
                       </p>
                     </div>
                   )}
@@ -445,10 +418,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     <div>
                       <CardTitle className="flex items-center gap-2">
                         <Users className="h-5 w-5" />
-                        Checked-In Attendees ({event.attendances.length})
+                        Event Attendees ({event.attendances.length})
                       </CardTitle>
                       <CardDescription>
-                        Select attendees to approve for NFT minting
+                        Select attendees to approve for NFT badge claiming
                       </CardDescription>
                     </div>
 
@@ -505,7 +478,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             />
                           </th>
                           <th className="text-left p-3 font-medium">Attendee</th>
-                          <th className="text-left p-3 font-medium hidden sm:table-cell">Check-in Time</th>
+                          <th className="text-left p-3 font-medium hidden sm:table-cell">Claimed At</th>
                           <th className="text-left p-3 font-medium hidden md:table-cell">Approval Status</th>
                           <th className="text-left p-3 font-medium hidden lg:table-cell">NFT Claimed</th>
                         </tr>
@@ -578,7 +551,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             {!(event.canManage || isAdmin) && event.attendances && event.attendances.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Checked In ({event.attendances.length})</CardTitle>
+                  <CardTitle>Attendees ({event.attendances.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -611,31 +584,33 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               </Card>
             )}
 
-            {/* QR Code for Check-In - Only for event creator/admin */}
+            {/* QR Code for Badge Claiming - Only for event creator/admin */}
             {(event.canManage || isAdmin) && event.approvalStatus === 'APPROVED' && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <QrCode className="h-5 w-5" />
-                    Check-In QR Code
+                    Badge Claim QR Code
                   </CardTitle>
                   <CardDescription>
-                    Share this QR code at your event for attendees to check in
+                    Share this QR code at your event for attendees to claim their badge
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {showQrCode && qrCodeUrl && (
                     <div className="flex justify-center p-4 bg-white rounded-lg">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={qrCodeUrl} alt="Check-in QR Code" className="w-48 h-48" />
+                      <img src={qrCodeUrl} alt="Badge Claim QR Code" className="w-48 h-48" />
                     </div>
                   )}
 
                   <div className="flex flex-col gap-2">
-                    <Button onClick={generateQRCode} variant="outline" className="w-full">
-                      <QrCode className="h-4 w-4 mr-2" />
-                      {showQrCode ? 'Regenerate QR Code' : 'Generate QR Code'}
-                    </Button>
+                    {!showQrCode && (
+                      <Button onClick={generateQRCode} variant="outline" className="w-full">
+                        <QrCode className="h-4 w-4 mr-2" />
+                        Generate QR Code
+                      </Button>
+                    )}
                     <Button onClick={copyCheckInLink} variant="outline" className="w-full">
                       {copied ? (
                         <>
@@ -645,14 +620,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                       ) : (
                         <>
                           <Copy className="h-4 w-4 mr-2" />
-                          Copy Check-In Link
+                          Copy Badge Claim Link
                         </>
                       )}
                     </Button>
                   </div>
 
                   <p className="text-xs text-muted-foreground text-center">
-                    Attendees scan the QR code to check in to the event
+                    Attendees scan the QR code to claim their event badge
                   </p>
                 </CardContent>
               </Card>

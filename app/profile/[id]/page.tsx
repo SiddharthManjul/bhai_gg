@@ -273,16 +273,6 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                               <p className="text-base font-bold">{badge.event.name}</p>
                             )}
                             <p className="text-xs text-muted-foreground">{badge.type.replace('_', ' ')}</p>
-                            {badge.nftMinted && badge.txHash && (
-                              <a
-                                href={`https://testnet.monadvision.com/tx/${badge.txHash}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-blue-500 hover:underline inline-block mt-1"
-                              >
-                                View NFT →
-                              </a>
-                            )}
                           </div>
                         </div>
                       ))}
